@@ -1,0 +1,100 @@
+{
+  "project_name": "Estrategia de Asalto",
+  "theme": "light",
+  "archetype": "Soft Professional (Archetype 3 adapted for calm authority)",
+  "language": "es",
+  "color_palette": {
+    "background": "#F8FAFC",
+    "primary": "#3B82F6",
+    "success": "#10B981",
+    "text_heading": "#0F172A",
+    "text_body": "#475569",
+    "border_subtle": "#E2E8F0",
+    "glass_background": "rgba(255, 255, 255, 0.6)",
+    "glass_border": "rgba(255, 255, 255, 0.5)"
+  },
+  "typography": {
+    "headings": {
+      "family": "Outfit, sans-serif",
+      "instruction": "Do not use Inter or generic sans. Add <link href='https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap' rel='stylesheet'>",
+      "styles": {
+        "h1": "text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-slate-900",
+        "h2": "text-2xl sm:text-3xl font-medium tracking-tight text-slate-900",
+        "h3": "text-xl sm:text-2xl font-medium text-slate-800",
+        "h4": "text-lg font-medium text-slate-800"
+      }
+    },
+    "body": {
+      "family": "Manrope, sans-serif",
+      "instruction": "Add <link href='https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&display=swap' rel='stylesheet'>",
+      "styles": {
+        "base": "text-base font-normal text-slate-600 leading-relaxed",
+        "small": "text-sm text-slate-500 font-medium"
+      }
+    }
+  },
+  "surfaces_and_glassmorphism": {
+    "glass_panel": "backdrop-blur-xl bg-white/60 border border-white/50 shadow-[0_8px_32px_rgba(0,0,0,0.04)] rounded-2xl",
+    "glass_header": "sticky top-0 z-50 backdrop-blur-xl bg-white/70 border-b border-white/40 shadow-sm",
+    "solid_card": "bg-white border border-slate-100 shadow-sm rounded-2xl",
+    "primary_button": "bg-[#3B82F6] hover:bg-blue-600 text-white shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] rounded-2xl font-medium transition-all duration-300 hover:-translate-y-0.5 px-6 py-3",
+    "secondary_button": "bg-white/50 backdrop-blur-md border border-slate-200 text-slate-700 hover:bg-white rounded-2xl font-medium transition-all duration-300 px-6 py-3",
+    "success_indicator": "text-[#10B981] bg-emerald-50 px-3 py-1 rounded-full text-sm font-medium border border-emerald-100"
+  },
+  "spacing_and_layout": {
+    "philosophy": "Generous spacing. p-6 or p-8 inside cards. Less is more.",
+    "border_radius": "rounded-2xl",
+    "dashboard_grid_bento": "grid grid-cols-1 md:grid-cols-12 gap-6"
+  },
+  "motion_and_interactions": {
+    "page_load": "Framer Motion staggered children. Use 'container' with 'staggerChildren: 0.1' and 'item' with Y-axis slide up (y: 20 -> y: 0) and fade in.",
+    "hover_states": "Subtle Y-axis translation (hover:-translate-y-1) and enhanced shadow on interactive cards. Never scale up text.",
+    "loading_button": "Main 'Generar Estrategia de Asalto' button MUST have a dynamic loading state using Framer Motion (e.g., pulsing overlay, spinning icon). Disable button and change cursor to wait.",
+    "markdown_generation": "Simulate streaming of Markdown output using a progressive reveal or typing effect to emphasize the 'Elite Headhunter AI' analysis.",
+    "tab_transitions": "Use Framer Motion layoutId for a smooth sliding indicator between tabs (Perfil, Análisis, Historial)."
+  },
+  "components": {
+    "landing": "Custom HTML/Tailwind. Hero section with glassmorphism login card floating over the abstract 3D background image.",
+    "dashboard": "Shadcn UI base, heavily customized. Remove default rigid borders. Apply the `glass_panel` classes. Tabs for 'Perfil', 'Análisis', 'Historial'.",
+    "cv_upload": "Drag and drop area. Dashed border `border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50/50 hover:bg-blue-50/50 hover:border-blue-300 hover:text-blue-600 transition-colors flex flex-col items-center justify-center p-8`.",
+    "analysis_textarea": "Focus state MUST have a soft blue ring `focus:ring-2 focus:ring-blue-200 focus:border-blue-400 rounded-2xl bg-white/80 backdrop-blur-sm min-h-[200px] p-4 resize-y`."
+  },
+  "media_and_assets": {
+    "icons": {
+      "library": "lucide-react",
+      "style": "stroke-width 1.5, text-slate-500 default, text-blue-500 active"
+    },
+    "images": {
+      "hero_background": {
+        "url": "https://static.prod-images.emergentagent.com/jobs/14c5b56c-fd76-49d5-aff4-08a6283f40a5/images/6e0fa3312b1ba401719fde9d57401ee8578575e91c7615da06e23efb4ad09b96.png",
+        "description": "3D frosted glass floating elements. Use as full background on the Landing page, set behind the glassmorphism login card, opacity around 30-50%."
+      },
+      "professional_workspace": {
+        "url": "https://images.unsplash.com/photo-1772475385458-21163e41f4ba?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwyfHxtaW5pbWFsaXN0JTIwbW9kZXJuJTIwY2FsbSUyMHByb2Zlc3Npb25hbCUyMHdvcmtzcGFjZSUyMGxhcHRvcHxlbnwwfHx8fDE3NzY0NDUzMzF8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Clean, modern minimalist workspace. Use as an ambient background in the 'Historial' empty state or 'Perfil' banner section."
+      }
+    }
+  },
+  "testing_attributes": {
+    "rule": "Every interactive element MUST have a data-testid attribute in kebab-case.",
+    "examples": [
+      "data-testid='login-google-btn'",
+      "data-testid='upload-cv-dropzone'",
+      "data-testid='job-description-textarea'",
+      "data-testid='generate-strategy-btn'",
+      "data-testid='markdown-output-panel'"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the color hex codes requested by the user: #F8FAFC (bg), #3B82F6 (primary), #10B981 (success).",
+    "Apply `rounded-2xl` (16px) globally to all cards, buttons, inputs, and modals.",
+    "Apply the `glass_panel` CSS rules to main containers to achieve the 'Soft Professional / Glassmorphism' look.",
+    "Implement Framer Motion for staggered list animations on the Dashboard.",
+    "When generating the 'Estrategia de Asalto', the main button MUST show a clear, animated loading state (spinner + pulsing text).",
+    "Do NOT use generic fallback fonts like Inter or Roboto for headers. Link and use 'Outfit' and 'Manrope' via Google Fonts.",
+    "Ensure the entire UI is strictly in Spanish (e.g., 'Perfil', 'Análisis', 'Historial', 'Generar Estrategia de Asalto').",
+    "Never use `bg-transparent` for text overlays; use `glass_panel` overlays to ensure text is perfectly readable (WCAG AA).",
+    "Use Javascript (.js/.jsx) instead of Typescript (.ts/.tsx) as per the workspace context.",
+    "The output for the job strategy must be beautifully rendered Markdown with clear h3s, lists, and bold text."
+  ]
+}
