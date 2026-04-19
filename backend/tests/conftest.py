@@ -39,7 +39,7 @@ def test_user_and_session(db):
     session_token = f"{TEST_PREFIX}session_{timestamp}"
     email = f"test.user.{timestamp}@example.com"
     
-    # Create user
+    # Create user with mode field
     user_doc = {
         "user_id": user_id,
         "email": email,
@@ -56,6 +56,7 @@ def test_user_and_session(db):
             }
         ],
         "cv_raw_text": "",
+        "mode": "professional",  # New field for dual-mode support
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     db.users.insert_one(user_doc)
@@ -81,6 +82,7 @@ def test_user_and_session(db):
     db.users.delete_many({"user_id": {"$regex": f"^{TEST_PREFIX}"}})
     db.user_sessions.delete_many({"session_token": {"$regex": f"^{TEST_PREFIX}"}})
     db.analyses.delete_many({"user_id": {"$regex": f"^{TEST_PREFIX}"}})
+    db.generated_cvs.delete_many({"user_id": {"$regex": f"^{TEST_PREFIX}"}})
 
 @pytest.fixture(scope="session")
 def expired_session(db, test_user_and_session):

@@ -1,56 +1,43 @@
-"""Career Assault backend - FastAPI + MongoDB + Emergent Auth + OpenAI (via emergentintegrations)."""
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, UploadFile, File, Depends
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
+"""Career Assault backend - FastAPI + MongoDB + Emergent Auth + OpenAI (via emergentintegrations).
+
+Modular layout:
+- deps.py:       shared db + auth dependency
+- schemas/:      Pydantic models
+- services/:     scoring engine, LLM client, CV builder
+- api/:          domain routers (analysis, cv_builder, job_import)
+- server.py:     auth, profile, legacy /analyses (MVP), router registration
+"""
+from __future__ import annotations
+
+import io
+import json
 import logging
 import uuid
-import json
-import io
-from pathlib import Path
-from pydantic import BaseModel, Field
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
-from datetime import datetime, timezone, timedelta
+
 import httpx
-from pypdf import PdfReader
-
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from pydantic import BaseModel
+from pypdf import PdfReader
+from starlette.middleware.cors import CORSMiddleware
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / ".env")
+from api.analysis import router as analysis_router
+from api.cv_builder import router as cv_builder_router
+from api.job_import import router as job_import_router
+from deps import EMERGENT_LLM_KEY, User, WorkExperience, db, get_current_user
 
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
-
-EMERGENT_LLM_KEY = os.environ["EMERGENT_LLM_KEY"]
-
-app = FastAPI(title="Career Assault API")
-api_router = APIRouter(prefix="/api")
+# ------------------------- APP SETUP -------------------------
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# ------------------------- MODELS -------------------------
-
-class WorkExperience(BaseModel):
-    role: str = ""
-    company: str = ""
-    period: str = ""
-    description: str = ""
+app = FastAPI(title="Career Assault API")
+api_router = APIRouter(prefix="/api")
 
 
-class User(BaseModel):
-    user_id: str
-    email: str
-    name: str
-    picture: Optional[str] = None
-    headline: str = ""
-    skills: List[str] = []
-    experience: List[WorkExperience] = []
-    cv_raw_text: str = ""
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+# ------------------------- LEGACY MODELS (MVP) -------------------------
 
 
 class ProfileUpdate(BaseModel):
@@ -58,6 +45,7 @@ class ProfileUpdate(BaseModel):
     headline: Optional[str] = None
     skills: Optional[List[str]] = None
     experience: Optional[List[WorkExperience]] = None
+    mode: Optional[str] = None  # "junior" | "professional"
 
 
 class AnalysisCreate(BaseModel):
@@ -74,43 +62,11 @@ class Analysis(BaseModel):
     created_at: datetime
 
 
-# ------------------------- AUTH HELPERS -------------------------
-
-async def get_current_user(request: Request) -> User:
-    """Authenticator helper - cookie first, then Authorization header."""
-    token = request.cookies.get("session_token")
-    if not token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[len("Bearer "):]
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    session_doc = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
-    if not session_doc:
-        raise HTTPException(status_code=401, detail="Invalid session")
-
-    expires_at = session_doc["expires_at"]
-    if isinstance(expires_at, str):
-        expires_at = datetime.fromisoformat(expires_at)
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=401, detail="Session expired")
-
-    user_doc = await db.users.find_one({"user_id": session_doc["user_id"]}, {"_id": 0})
-    if not user_doc:
-        raise HTTPException(status_code=401, detail="User not found")
-    if isinstance(user_doc.get("created_at"), str):
-        user_doc["created_at"] = datetime.fromisoformat(user_doc["created_at"])
-    return User(**user_doc)
-
-
 # ------------------------- AUTH ROUTES -------------------------
+
 
 @api_router.post("/auth/session")
 async def process_session(request: Request, response: Response):
-    """Receive session_id from frontend, exchange it for user data, create session."""
     body = await request.json()
     session_id = body.get("session_id")
     if not session_id:
@@ -188,6 +144,7 @@ async def auth_logout(request: Request, response: Response):
 
 # ------------------------- PROFILE ROUTES -------------------------
 
+
 @api_router.get("/profile")
 async def get_profile(user: User = Depends(get_current_user)):
     return user.model_dump()
@@ -200,6 +157,8 @@ async def update_profile(payload: ProfileUpdate, user: User = Depends(get_curren
         update["experience"] = [
             exp if isinstance(exp, dict) else exp.model_dump() for exp in update["experience"]
         ]
+    if "mode" in update and update["mode"] not in {"junior", "professional"}:
+        update["mode"] = "professional"
     if update:
         await db.users.update_one({"user_id": user.user_id}, {"$set": update})
     updated = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
@@ -208,7 +167,6 @@ async def update_profile(payload: ProfileUpdate, user: User = Depends(get_curren
 
 @api_router.post("/profile/upload-cv")
 async def upload_cv(file: UploadFile = File(...), user: User = Depends(get_current_user)):
-    """Extract text from PDF, send to GPT-5.2 to parse structured profile data."""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Solo se aceptan archivos PDF")
 
@@ -239,10 +197,8 @@ async def upload_cv(file: UploadFile = File(...), user: User = Depends(get_curre
         system_message=system,
     ).with_model("openai", "gpt-5.2")
 
-    msg = UserMessage(text=f"TEXTO DEL CV:\n\n{raw_text[:15000]}")
-    response_text = await chat.send_message(msg)
+    response_text = await chat.send_message(UserMessage(text=f"TEXTO DEL CV:\n\n{raw_text[:15000]}"))
 
-    # Parse JSON (tolerant to accidental fencing)
     cleaned = response_text.strip()
     if cleaned.startswith("```"):
         cleaned = cleaned.split("```", 2)[1]
@@ -270,7 +226,7 @@ async def upload_cv(file: UploadFile = File(...), user: User = Depends(get_curre
     return updated
 
 
-# ------------------------- ANALYSIS ROUTES -------------------------
+# ------------------------- LEGACY ANALYSES (MVP markdown reports) -------------------------
 
 HEADHUNTER_SYSTEM_PROMPT = """Actúa como un Headhunter de élite y experto en algoritmos ATS. Tu misión es cruzar el CV del usuario con la Oferta de Empleo proporcionada para generar una estrategia de asalto ganadora.
 
@@ -389,12 +345,20 @@ async def delete_analysis(analysis_id: str, user: User = Depends(get_current_use
 
 # ------------------------- HEALTH -------------------------
 
+
 @api_router.get("/")
 async def root():
     return {"status": "ok", "service": "career-assault"}
 
 
+# ------------------------- REGISTER ROUTERS -------------------------
+
 app.include_router(api_router)
+app.include_router(analysis_router)        # /api/analyze
+app.include_router(cv_builder_router)      # /api/cv/build, /api/cv/questionnaire, /api/cv/list
+app.include_router(job_import_router)      # /api/job/import
+
+import os
 
 app.add_middleware(
     CORSMiddleware,
@@ -403,8 +367,3 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
