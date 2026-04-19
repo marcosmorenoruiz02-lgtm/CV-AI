@@ -4,6 +4,7 @@ Adds JSON-only helper with robust parsing (markdown-fence tolerant, repair attem
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -17,12 +18,14 @@ from deps import EMERGENT_LLM_KEY
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = ("openai", "gpt-5.2")
+FALLBACK_MODEL = ("openai", "gpt-5.1")
+LLM_CALL_TIMEOUT_S = 45.0  # hard cap per model attempt
 
 
-def _new_chat(system: str, session_id: str | None = None) -> LlmChat:
+def _new_chat(system: str, session_id: str | None = None, model: tuple[str, str] | None = None) -> LlmChat:
     sid = session_id or f"llm-{uuid.uuid4().hex[:10]}"
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=sid, system_message=system)
-    chat.with_model(*DEFAULT_MODEL)
+    chat.with_model(*(model or DEFAULT_MODEL))
     return chat
 
 
@@ -55,9 +58,19 @@ def _extract_json_block(text: str) -> str:
 
 
 async def call_text(system: str, user_text: str, session_id: str | None = None) -> str:
-    """Plain text completion."""
-    chat = _new_chat(system, session_id)
-    return await chat.send_message(UserMessage(text=user_text))
+    """Plain text completion with hard timeout + fallback model."""
+    for model in (DEFAULT_MODEL, FALLBACK_MODEL):
+        try:
+            chat = _new_chat(system, session_id, model=model)
+            return await asyncio.wait_for(
+                chat.send_message(UserMessage(text=user_text)),
+                timeout=LLM_CALL_TIMEOUT_S,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("LLM call (%s) timed out after %ss", model, LLM_CALL_TIMEOUT_S)
+        except Exception as e:
+            logger.warning("LLM call (%s) failed: %s", model, e)
+    raise RuntimeError("Both primary and fallback LLM models failed")
 
 
 async def call_json(
@@ -67,19 +80,32 @@ async def call_json(
     session_id: str | None = None,
     fallback: Any | None = None,
 ) -> Any:
-    """Send a prompt that MUST return JSON. Returns parsed Python object.
+    """Send a prompt that MUST return JSON. Parses robustly with fallback model."""
+    raw = None
+    for model in (DEFAULT_MODEL, FALLBACK_MODEL):
+        try:
+            chat = _new_chat(system, session_id, model=model)
+            raw = await asyncio.wait_for(
+                chat.send_message(UserMessage(text=user_text)),
+                timeout=LLM_CALL_TIMEOUT_S,
+            )
+            break
+        except asyncio.TimeoutError:
+            logger.warning("LLM call (%s) timed out after %ss", model, LLM_CALL_TIMEOUT_S)
+            raw = None
+        except Exception as e:
+            logger.warning("LLM call (%s) failed: %s", model, e)
+            raw = None
+    if raw is None:
+        if fallback is not None:
+            return fallback
+        raise RuntimeError("Both primary and fallback LLM models failed")
 
-    Robust to markdown fences and minor garbage. If parsing fails, returns
-    `fallback` (or raises if fallback is None).
-    """
-    chat = _new_chat(system, session_id)
-    raw = await chat.send_message(UserMessage(text=user_text))
     cleaned = _strip_fences(raw)
     try:
         return json.loads(cleaned)
     except Exception:
         pass
-    # Recovery
     candidate = _extract_json_block(cleaned)
     candidate = re.sub(r",(\s*[}\]])", r"\1", candidate)  # trailing commas
     try:

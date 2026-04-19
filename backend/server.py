@@ -72,14 +72,34 @@ async def process_session(request: Request, response: Response):
     if not session_id:
         raise HTTPException(status_code=400, detail="session_id required")
 
-    async with httpx.AsyncClient(timeout=15.0) as http:
-        r = await http.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": session_id},
+    data = None
+    last_err: Exception | None = None
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as http:
+                r = await http.get(
+                    "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                    headers={"X-Session-ID": session_id},
+                )
+            if r.status_code == 200:
+                data = r.json()
+                break
+            if r.status_code in (401, 403, 404):
+                # Definitive failure — don't retry.
+                raise HTTPException(status_code=401, detail="Invalid session_id")
+            last_err = RuntimeError(f"Emergent auth HTTP {r.status_code}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            last_err = e
+            logger.warning("Emergent auth call failed (attempt %s): %s", attempt + 1, e)
+
+    if data is None:
+        logger.error("Emergent auth exhausted retries: %s", last_err)
+        raise HTTPException(
+            status_code=503,
+            detail="Servicio de autenticación temporalmente no disponible. Reintenta en unos segundos.",
         )
-        if r.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid session_id")
-        data = r.json()
 
     email = data["email"]
     name = data["name"]
