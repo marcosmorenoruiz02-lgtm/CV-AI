@@ -44,6 +44,14 @@ h5 {
     letter-spacing: -0.02em;
 }
 
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5 {
+    color: #f1f5f9;
+}
+
 code,
 pre {
     font-family: "JetBrains Mono", Menlo, Monaco, monospace;
@@ -72,6 +80,27 @@ pre {
         --ring: 217 91% 60%;
         --radius: 1rem;
     }
+    .dark {
+        --background: 222 47% 7%;
+        --foreground: 210 40% 98%;
+        --card: 222 47% 11%;
+        --card-foreground: 210 40% 98%;
+        --popover: 222 47% 11%;
+        --popover-foreground: 210 40% 98%;
+        --primary: 217 91% 65%;
+        --primary-foreground: 222 47% 11%;
+        --secondary: 217 33% 17%;
+        --secondary-foreground: 210 40% 98%;
+        --muted: 217 33% 17%;
+        --muted-foreground: 215 20% 65%;
+        --accent: 217 33% 17%;
+        --accent-foreground: 210 40% 98%;
+        --destructive: 0 63% 40%;
+        --destructive-foreground: 210 40% 98%;
+        --border: 217 33% 20%;
+        --input: 217 33% 20%;
+        --ring: 217 91% 65%;
+    }
 }
 
 @layer base {
@@ -82,69 +111,73 @@ pre {
 
 @layer components {
     .glass-panel {
-        @apply rounded-2xl border border-white/60 bg-white/60 backdrop-blur-xl;
+        @apply rounded-2xl border border-white/60 bg-white/60 backdrop-blur-xl dark:border-slate-700/60 dark:bg-slate-900/60;
         box-shadow: 0 8px 32px rgba(15, 23, 42, 0.05);
     }
 
+    .dark .glass-panel {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
     .glass-header {
-        @apply sticky top-0 z-40 border-b border-white/40 bg-white/70 backdrop-blur-xl;
+        @apply sticky top-0 z-40 border-b border-white/40 bg-white/70 backdrop-blur-xl dark:border-slate-800/60 dark:bg-slate-950/70;
     }
 
     .soft-card {
-        @apply rounded-2xl border border-slate-100 bg-white shadow-sm;
+        @apply rounded-2xl border border-slate-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
     }
 
     .btn-primary {
-        @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-[#3B82F6] px-6 py-3 font-medium text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0;
+        @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-[#3B82F6] px-6 py-3 font-medium text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:bg-blue-500 dark:hover:bg-blue-400;
         box-shadow: 0 4px 14px 0 rgba(59, 130, 246, 0.39);
     }
 
     .btn-ghost {
-        @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/60 px-5 py-2.5 font-medium text-slate-700 backdrop-blur-md transition-all duration-300 hover:bg-white;
+        @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/60 px-5 py-2.5 font-medium text-slate-700 backdrop-blur-md transition-all duration-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200 dark:hover:bg-slate-800;
     }
 
     .badge-success {
-        @apply inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-sm font-medium text-[#10B981];
+        @apply inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-sm font-medium text-[#10B981] dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300;
     }
 
     .input-soft {
-        @apply w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-slate-900 placeholder-slate-400 transition-all duration-200 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200;
+        @apply w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-slate-900 placeholder-slate-400 transition-all duration-200 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-blue-500 dark:focus:ring-blue-900/60;
     }
 
     .textarea-soft {
-        @apply w-full resize-y rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-slate-900 placeholder-slate-400 transition-all duration-200 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200;
+        @apply w-full resize-y rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-slate-900 placeholder-slate-400 transition-all duration-200 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-blue-500 dark:focus:ring-blue-900/60;
         min-height: 220px;
     }
 }
 
 /* Markdown report styling */
 .markdown-report h3 {
-    @apply mt-8 mb-3 text-xl font-semibold text-slate-900;
+    @apply mt-8 mb-3 text-xl font-semibold text-slate-900 dark:text-slate-100;
 }
 .markdown-report h2 {
-    @apply mt-10 mb-4 text-2xl font-semibold text-slate-900;
+    @apply mt-10 mb-4 text-2xl font-semibold text-slate-900 dark:text-slate-100;
 }
 .markdown-report p {
-    @apply my-3 leading-relaxed text-slate-700;
+    @apply my-3 leading-relaxed text-slate-700 dark:text-slate-300;
 }
 .markdown-report ul {
-    @apply my-3 list-disc space-y-1.5 pl-6 text-slate-700;
+    @apply my-3 list-disc space-y-1.5 pl-6 text-slate-700 dark:text-slate-300;
 }
 .markdown-report ol {
-    @apply my-3 list-decimal space-y-1.5 pl-6 text-slate-700;
+    @apply my-3 list-decimal space-y-1.5 pl-6 text-slate-700 dark:text-slate-300;
 }
 .markdown-report strong {
-    @apply font-semibold text-slate-900;
+    @apply font-semibold text-slate-900 dark:text-slate-100;
 }
 .markdown-report blockquote {
-    @apply my-4 border-l-4 border-blue-300 bg-blue-50/50 px-5 py-3 italic text-slate-700;
+    @apply my-4 border-l-4 border-blue-300 bg-blue-50/50 px-5 py-3 italic text-slate-700 dark:border-blue-500/60 dark:bg-blue-950/30 dark:text-slate-200;
     border-radius: 0 16px 16px 0;
 }
 .markdown-report code {
-    @apply rounded bg-slate-100 px-1.5 py-0.5 text-sm text-slate-800;
+    @apply rounded bg-slate-100 px-1.5 py-0.5 text-sm text-slate-800 dark:bg-slate-800 dark:text-slate-200;
 }
 .markdown-report pre {
-    @apply my-4 overflow-x-auto rounded-2xl bg-slate-900 p-4 text-slate-100;
+    @apply my-4 overflow-x-auto rounded-2xl bg-slate-900 p-4 text-slate-100 dark:bg-slate-950;
 }
 
 /* Subtle scrollbar */

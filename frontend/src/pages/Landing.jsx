@@ -1,5 +1,19 @@
-import { motion } from "framer-motion";
-import { Sparkles, Target, FileUp, LineChart, ArrowRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+    UploadCloud,
+    Loader2,
+    Target,
+    Sparkles,
+    AlertCircle,
+    ArrowRight,
+    CheckCircle2,
+    FileText,
+    Zap,
+} from "lucide-react";
+import axios from "axios";
+import ThemeToggle from "../components/ThemeToggle";
+import { API } from "../lib/api";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 const startGoogleLogin = () => {
@@ -7,50 +21,60 @@ const startGoogleLogin = () => {
     window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
 };
 
-const container = {
-    hidden: { opacity: 0 },
-    show: {
-        opacity: 1,
-        transition: { staggerChildren: 0.08, delayChildren: 0.1 },
-    },
-};
-
-const item = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
-};
-
-const features = [
-    {
-        icon: Target,
-        title: "Radiografía del Puesto",
-        desc: "Descifra el problema real detrás de cada oferta antes de postularte.",
-    },
-    {
-        icon: LineChart,
-        title: "Análisis de Gap",
-        desc: "Mapeo de habilidades transferibles para argumentar cada fortaleza.",
-    },
-    {
-        icon: FileUp,
-        title: "CV en PDF",
-        desc: "Sube tu CV y tu perfil se completa automáticamente con IA.",
-    },
-    {
-        icon: Sparkles,
-        title: "Estrategia de Asalto",
-        desc: "Un mensaje de LinkedIn persuasivo, listo para enviar al hiring manager.",
-    },
-];
-
 export default function Landing() {
+    const [view, setView] = useState("hero"); // hero | loading | result | error
+    const [result, setResult] = useState(null);
+    const [error, setError] = useState("");
+    const [dragOver, setDragOver] = useState(false);
+    const fileRef = useRef(null);
+
+    const onUpload = async (file) => {
+        if (!file) return;
+        if (!file.name.toLowerCase().endsWith(".pdf")) {
+            setError("Solo aceptamos PDF por ahora.");
+            setView("error");
+            return;
+        }
+        if (file.size > 8 * 1024 * 1024) {
+            setError("Tu PDF supera los 8 MB. Comprímelo y vuelve a subirlo.");
+            setView("error");
+            return;
+        }
+        setView("loading");
+        setError("");
+        const fd = new FormData();
+        fd.append("file", file);
+        try {
+            const { data } = await axios.post(`${API}/quick-analyze`, fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+                timeout: 90000,
+            });
+            setResult(data);
+            setView("result");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        } catch (err) {
+            setError(
+                err?.response?.data?.detail ||
+                    "No pudimos analizar tu CV. Vuelve a intentarlo en unos segundos.",
+            );
+            setView("error");
+        }
+    };
+
+    const onDrop = (e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer?.files?.[0];
+        if (file) onUpload(file);
+    };
+
     return (
         <div className="relative min-h-screen overflow-hidden" data-testid="landing-page">
             {/* Ambient blobs */}
             <div aria-hidden className="pointer-events-none absolute inset-0">
-                <div className="absolute left-[-10%] top-[-10%] h-[480px] w-[480px] rounded-full bg-blue-200/50 blur-3xl" />
-                <div className="absolute right-[-5%] top-[20%] h-[420px] w-[420px] rounded-full bg-emerald-200/40 blur-3xl" />
-                <div className="absolute bottom-[-10%] left-[30%] h-[360px] w-[360px] rounded-full bg-sky-200/40 blur-3xl" />
+                <div className="absolute left-[-10%] top-[-10%] h-[480px] w-[480px] rounded-full bg-blue-200/50 blur-3xl dark:bg-blue-500/10" />
+                <div className="absolute right-[-5%] top-[20%] h-[420px] w-[420px] rounded-full bg-emerald-200/40 blur-3xl dark:bg-emerald-500/10" />
+                <div className="absolute bottom-[-10%] left-[30%] h-[360px] w-[360px] rounded-full bg-sky-200/40 blur-3xl dark:bg-sky-500/10" />
             </div>
 
             <header className="glass-header">
@@ -59,159 +83,211 @@ export default function Landing() {
                         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#3B82F6] text-white shadow-lg shadow-blue-500/30">
                             <Target className="h-5 w-5" strokeWidth={2} />
                         </div>
-                        <span className="font-[Outfit] text-lg font-semibold text-slate-900">
+                        <span className="font-[Outfit] text-lg font-semibold text-slate-900 dark:text-slate-100">
                             Estrategia de Asalto
                         </span>
                     </div>
-                    <button
-                        data-testid="header-login-btn"
-                        onClick={startGoogleLogin}
-                        className="btn-ghost"
-                    >
-                        Entrar
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <ThemeToggle />
+                        <button
+                            data-testid="header-login-btn"
+                            onClick={startGoogleLogin}
+                            className="btn-ghost"
+                        >
+                            Entrar
+                        </button>
+                    </div>
                 </div>
             </header>
 
-            <main className="relative mx-auto max-w-7xl px-6 pb-24 pt-16 sm:pt-24">
-                <motion.section
-                    variants={container}
-                    initial="hidden"
-                    animate="show"
-                    className="grid grid-cols-1 items-center gap-12 lg:grid-cols-12"
-                >
-                    <div className="lg:col-span-7">
-                        <motion.div variants={item} className="mb-5">
-                            <span className="badge-success" data-testid="hero-badge">
-                                <Sparkles className="h-4 w-4" /> Powered by GPT-5.2
-                            </span>
-                        </motion.div>
-
-                        <motion.h1
-                            variants={item}
-                            className="text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl"
+            <main className="relative mx-auto max-w-6xl px-6 pb-24 pt-12 sm:pt-16">
+                <AnimatePresence mode="wait">
+                    {view === "hero" && (
+                        <motion.section
+                            key="hero"
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -16 }}
+                            transition={{ duration: 0.35 }}
+                            className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12"
                         >
-                            Convierte cada oferta en una{" "}
-                            <span className="relative inline-block">
-                                <span className="relative z-10 text-[#3B82F6]">estrategia ganadora</span>
-                                <span className="absolute bottom-1 left-0 right-0 z-0 h-3 rounded-md bg-blue-100/80" />
-                            </span>
-                            .
-                        </motion.h1>
-
-                        <motion.p
-                            variants={item}
-                            className="mt-6 max-w-xl text-lg leading-relaxed text-slate-600"
-                        >
-                            Un headhunter de élite y experto en ATS trabajando para ti. Sube tu
-                            CV, pega la oferta y recibe un informe accionable en segundos.
-                        </motion.p>
-
-                        <motion.div variants={item} className="mt-8 flex flex-wrap items-center gap-3">
-                            <button
-                                data-testid="hero-login-btn"
-                                onClick={startGoogleLogin}
-                                className="btn-primary group"
-                            >
-                                <GoogleIcon />
-                                Entrar con Google
-                                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                            </button>
-                            <a
-                                href="#features"
-                                data-testid="learn-more-link"
-                                className="text-sm font-medium text-slate-600 underline-offset-4 hover:text-slate-900 hover:underline"
-                            >
-                                Ver cómo funciona
-                            </a>
-                        </motion.div>
-
-                        <motion.div
-                            variants={item}
-                            className="mt-10 flex items-center gap-5 text-sm text-slate-500"
-                        >
-                            <div className="flex -space-x-2">
-                                {["#3B82F6", "#10B981", "#0EA5E9"].map((c) => (
-                                    <span
-                                        key={c}
-                                        className="inline-block h-7 w-7 rounded-full border-2 border-white"
-                                        style={{ background: c }}
-                                    />
-                                ))}
-                            </div>
-                            <span>Datos privados. Sin anuncios. Sin ruido.</span>
-                        </motion.div>
-                    </div>
-
-                    <motion.div variants={item} className="lg:col-span-5">
-                        <FloatingReportCard />
-                    </motion.div>
-                </motion.section>
-
-                <section id="features" className="mt-28">
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.5 }}
-                        className="mb-10 max-w-2xl"
-                    >
-                        <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-                            Un informe, cinco bloques accionables.
-                        </h2>
-                        <p className="mt-3 text-slate-600">
-                            Diseñado para quienes no postulan a ciegas.
-                        </p>
-                    </motion.div>
-
-                    <motion.div
-                        variants={container}
-                        initial="hidden"
-                        whileInView="show"
-                        viewport={{ once: true, amount: 0.2 }}
-                        className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4"
-                    >
-                        {features.map((f) => (
-                            <motion.div
-                                key={f.title}
-                                variants={item}
-                                whileHover={{ y: -4 }}
-                                className="glass-panel p-6"
-                                data-testid={`feature-${f.title.toLowerCase().replace(/\s+/g, "-")}`}
-                            >
-                                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                                    <f.icon className="h-5 w-5" strokeWidth={1.7} />
+                            <div className="lg:col-span-6">
+                                <span className="badge-success" data-testid="hero-badge">
+                                    <Zap className="h-4 w-4" /> Análisis gratis · sin registro
+                                </span>
+                                <h1 className="mt-5 text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-5xl lg:text-6xl">
+                                    Tu CV no pasa los{" "}
+                                    <span className="relative inline-block">
+                                        <span className="relative z-10 text-[#3B82F6]">filtros ATS</span>
+                                        <span className="absolute bottom-1 left-0 right-0 z-0 h-3 rounded-md bg-blue-100/80 dark:bg-blue-500/20" />
+                                    </span>
+                                    .
+                                </h1>
+                                <p className="mt-5 max-w-xl text-lg leading-relaxed text-slate-600 dark:text-slate-300">
+                                    Te decimos por qué y cómo arreglarlo en 30 segundos. Sin login, sin
+                                    rollos.
+                                </p>
+                                <div className="mt-6 hidden items-center gap-2 lg:flex">
+                                    <ArrowRight className="h-4 w-4 text-blue-500" />
+                                    <span className="text-sm text-slate-500 dark:text-slate-400">
+                                        Suelta tu CV en el panel de la derecha
+                                    </span>
                                 </div>
-                                <h3 className="mb-2 text-lg font-semibold text-slate-900">
-                                    {f.title}
-                                </h3>
-                                <p className="text-sm leading-relaxed text-slate-600">{f.desc}</p>
-                            </motion.div>
-                        ))}
-                    </motion.div>
-                </section>
+                            </div>
 
-                <section className="mt-28">
-                    <div className="glass-panel flex flex-col items-center gap-4 p-10 text-center">
-                        <h2 className="max-w-2xl text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-                            La diferencia entre postular y ser contratado está en la estrategia.
-                        </h2>
-                        <p className="max-w-lg text-slate-600">
-                            Entra gratis y genera tu primer informe en menos de un minuto.
-                        </p>
-                        <button
-                            data-testid="cta-login-btn"
-                            onClick={startGoogleLogin}
-                            className="btn-primary mt-2"
+                            <div className="lg:col-span-6">
+                                <UploadCard
+                                    fileRef={fileRef}
+                                    dragOver={dragOver}
+                                    setDragOver={setDragOver}
+                                    onUpload={onUpload}
+                                    onDrop={onDrop}
+                                />
+                            </div>
+                        </motion.section>
+                    )}
+
+                    {view === "loading" && (
+                        <motion.section
+                            key="loading"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="mx-auto flex max-w-2xl flex-col items-center pt-12 text-center"
+                            data-testid="loading-section"
                         >
-                            <GoogleIcon /> Empezar ahora
-                        </button>
-                    </div>
-                </section>
+                            <div className="glass-panel w-full p-10">
+                                <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-blue-500" />
+                                <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
+                                    Analizando tu CV...
+                                </h2>
+                                <p className="mt-2 text-slate-600 dark:text-slate-300">
+                                    Mirándolo como lo haría un ATS y un reclutador a la vez.
+                                </p>
+                                <ProgressLoader />
+                            </div>
+                        </motion.section>
+                    )}
+
+                    {view === "result" && result && (
+                        <motion.section
+                            key="result"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0 }}
+                            data-testid="result-section"
+                        >
+                            <ResultPanel
+                                result={result}
+                                onTryAgain={() => {
+                                    setResult(null);
+                                    setView("hero");
+                                }}
+                            />
+                        </motion.section>
+                    )}
+
+                    {view === "error" && (
+                        <motion.section
+                            key="error"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="mx-auto max-w-xl pt-16"
+                            data-testid="error-section"
+                        >
+                            <div className="glass-panel flex flex-col items-center p-10 text-center">
+                                <AlertCircle className="mb-3 h-10 w-10 text-red-500" />
+                                <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                                    No pudimos analizarlo
+                                </h2>
+                                <p className="mt-2 text-slate-600 dark:text-slate-300">{error}</p>
+                                <button
+                                    data-testid="retry-btn"
+                                    onClick={() => setView("hero")}
+                                    className="btn-primary mt-6"
+                                >
+                                    Probar de nuevo
+                                </button>
+                            </div>
+                        </motion.section>
+                    )}
+                </AnimatePresence>
+
+                {/* How it works */}
+                {view === "hero" && (
+                    <section id="how-it-works" className="mt-24">
+                        <h2 className="mb-10 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+                            Cómo funciona.
+                        </h2>
+                        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+                            {[
+                                {
+                                    n: "1",
+                                    icon: UploadCloud,
+                                    title: "Subes tu CV",
+                                    desc: "PDF, sin login. Tarda 2 segundos.",
+                                },
+                                {
+                                    n: "2",
+                                    icon: Sparkles,
+                                    title: "Lo analizamos con IA + ATS",
+                                    desc: "Score real, problemas reales, lenguaje cercano.",
+                                },
+                                {
+                                    n: "3",
+                                    icon: CheckCircle2,
+                                    title: "Te damos mejoras exactas",
+                                    desc: "Antes vs después. Listo para copiar y pegar.",
+                                },
+                            ].map((s) => (
+                                <div key={s.n} className="glass-panel p-6">
+                                    <div className="mb-3 flex items-center gap-3">
+                                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
+                                            {s.n}
+                                        </span>
+                                        <s.icon className="h-5 w-5 text-blue-500" strokeWidth={1.5} />
+                                    </div>
+                                    <h3 className="mb-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                                        {s.title}
+                                    </h3>
+                                    <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                                        {s.desc}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Fake preview */}
+                        <div className="mt-12">
+                            <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                                Ejemplo real de output
+                            </h3>
+                            <FakePreview />
+                        </div>
+
+                        <div className="mt-14 flex flex-col items-center gap-3 text-center">
+                            <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 sm:text-3xl">
+                                Optimiza tu CV ahora.
+                            </h2>
+                            <button
+                                data-testid="cta-bottom-upload-btn"
+                                onClick={() => fileRef.current?.click()}
+                                className="btn-primary !py-3.5 !px-7 text-base"
+                            >
+                                <UploadCloud className="h-5 w-5" />
+                                Sube tu CV gratis
+                            </button>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                                Sin tarjeta. Sin registro. Tu CV no se almacena en este modo.
+                            </p>
+                        </div>
+                    </section>
+                )}
             </main>
 
-            <footer className="border-t border-slate-200/60 py-8">
-                <div className="mx-auto max-w-7xl px-6 text-sm text-slate-500">
+            <footer className="border-t border-slate-200/60 py-8 dark:border-slate-800/60">
+                <div className="mx-auto max-w-7xl px-6 text-sm text-slate-500 dark:text-slate-400">
                     © {new Date().getFullYear()} Estrategia de Asalto · Hecho para quienes juegan a ganar.
                 </div>
             </footer>
@@ -219,71 +295,314 @@ export default function Landing() {
     );
 }
 
-function GoogleIcon() {
+function UploadCard({ fileRef, dragOver, setDragOver, onUpload, onDrop }) {
     return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="h-5 w-5" aria-hidden="true">
-            <path
-                fill="#FFC107"
-                d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l5.7-5.7C34.1 6 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"
-            />
-            <path
-                fill="#FF3D00"
-                d="M6.3 14.7l6.6 4.8C14.6 16 18.9 13 24 13c3.1 0 5.8 1.1 8 3l5.7-5.7C34.1 6 29.3 4 24 4 16.3 4 9.7 8.4 6.3 14.7z"
-            />
-            <path
-                fill="#4CAF50"
-                d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.4-4.5 2.4-7.2 2.4-5.2 0-9.6-3.3-11.2-7.9l-6.5 5C9.5 39.5 16.1 44 24 44z"
-            />
-            <path
-                fill="#1976D2"
-                d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.2 5.2c-.4.4 6.6-4.8 6.6-14.8 0-1.2-.1-2.3-.4-3.5z"
-            />
-        </svg>
-    );
-}
-
-function FloatingReportCard() {
-    return (
-        <motion.div
-            animate={{ y: [0, -8, 0] }}
-            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-            className="glass-panel relative overflow-hidden p-6"
-        >
-            <div className="mb-4 flex items-center justify-between">
+        <div className="glass-panel p-6">
+            <div className="mb-4 flex items-center gap-2">
                 <span className="badge-success">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Informe generado
+                    Tarda menos de 30 segundos
                 </span>
-                <span className="text-xs text-slate-400">hace 3s</span>
             </div>
-            <h4 className="mb-4 font-[Outfit] text-lg font-semibold text-slate-900">
-                Senior Product Designer @ Atlas
-            </h4>
-            <div className="space-y-3 text-sm">
-                <SkeletonLine label="Radiografía del Puesto" width="92%" />
-                <SkeletonLine label="Análisis de Gap" width="78%" />
-                <SkeletonLine label="Optimización ATS" width="85%" delay={0.4} />
-                <SkeletonLine label="Insider Advice" width="70%" delay={0.6} />
+            <div
+                data-testid="hero-dropzone"
+                onClick={() => fileRef.current?.click()}
+                onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 text-center transition-all ${
+                    dragOver
+                        ? "border-blue-400 bg-blue-50/60 dark:border-blue-400 dark:bg-blue-500/10"
+                        : "border-slate-300 bg-white/40 hover:border-blue-300 hover:bg-blue-50/40 dark:border-slate-700 dark:bg-slate-900/40 dark:hover:border-blue-500/60 dark:hover:bg-blue-500/5"
+                }`}
+            >
+                <input
+                    ref={fileRef}
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={(e) => onUpload(e.target.files?.[0])}
+                    data-testid="hero-file-input"
+                />
+                <UploadCloud className="mb-3 h-10 w-10 text-blue-500" strokeWidth={1.4} />
+                <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    Sube tu CV gratis
+                </p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Arrastra el PDF aquí o haz clic
+                </p>
+                <span className="mt-5 inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
+                    <FileText className="h-3.5 w-3.5" /> Solo PDF · máx. 8 MB
+                </span>
             </div>
-            <div className="mt-5 rounded-xl border-l-4 border-blue-300 bg-blue-50/60 px-4 py-3 text-xs italic text-slate-600">
-                "Hola Ana, vi que Atlas está escalando el equipo de producto..."
+            <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span>No guardamos tu CV en este modo</span>
+                <button
+                    onClick={startGoogleLogin}
+                    className="underline-offset-2 hover:underline"
+                    data-testid="hero-account-link"
+                >
+                    ¿Ya tienes cuenta?
+                </button>
             </div>
-        </motion.div>
+        </div>
     );
 }
 
-function SkeletonLine({ label, width, delay = 0 }) {
+function ProgressLoader() {
     return (
-        <div>
-            <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        <div className="mt-6 space-y-3 text-left">
+            {["Leyendo el PDF...", "Extrayendo experiencia y skills...", "Calculando score ATS..."].map((label, i) => (
+                <div key={label} className="space-y-1">
+                    <div className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        {label}
+                    </div>
+                    <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: "92%" }}
+                        transition={{ duration: 1.2 + i * 0.4, delay: i * 0.3, ease: "easeOut" }}
+                        className="h-2 rounded-full bg-gradient-to-r from-blue-300 to-emerald-300 dark:from-blue-500 dark:to-emerald-500"
+                    />
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function FakePreview() {
+    return (
+        <div className="glass-panel p-6">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h4 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        Score ATS
+                    </h4>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                        Ejemplo de informe (no es tu CV)
+                    </p>
+                </div>
+                <ScoreCircle value={62} label="Aceptable" />
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-red-100 bg-red-50/60 p-4 dark:border-red-500/30 dark:bg-red-500/10">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-red-700 dark:text-red-300">
+                        Problemas
+                    </div>
+                    <ul className="space-y-1.5 text-sm text-slate-700 dark:text-slate-200">
+                        <li>• Falta de keywords del puesto</li>
+                        <li>• Experiencia poco clara</li>
+                        <li>• Verbos sin impacto medible</li>
+                    </ul>
+                </div>
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                        Ejemplo de mejora
+                    </div>
+                    <p className="text-sm text-slate-500 line-through dark:text-slate-400">
+                        Responsable de ventas
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                        Incrementé ventas un 32% en 6 meses lanzando 3 nuevos canales
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function ResultPanel({ result, onTryAgain }) {
+    const score = result.final_score ?? 0;
+    const tone = score >= 80 ? "Excelente" : score >= 60 ? "Aceptable" : score >= 40 ? "Mejorable" : "Necesita arreglos";
+    return (
+        <div className="space-y-6">
+            <div className="glass-panel p-6">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <span className="badge-success">
+                            <CheckCircle2 className="h-4 w-4" /> Tu informe está listo
+                        </span>
+                        <h2 className="mt-3 text-2xl font-semibold text-slate-900 dark:text-slate-100 sm:text-3xl">
+                            Score ATS de tu CV
+                        </h2>
+                        {result.detected_role && (
+                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                Detectamos perfil: <strong className="text-slate-700 dark:text-slate-200">{result.detected_role}</strong>
+                            </p>
+                        )}
+                    </div>
+                    <ScoreCircle value={score} label={tone} large />
+                </div>
+                {result.summary && (
+                    <p className="mt-5 text-slate-700 dark:text-slate-200">{result.summary}</p>
+                )}
+                <div className="mt-5 grid grid-cols-3 gap-3">
+                    <MiniScore label="ATS" value={result.ats_score} />
+                    <MiniScore label="Formato" value={result.format_score} />
+                    <MiniScore label="Keywords" value={result.keyword_score} />
+                </div>
+            </div>
+
+            {result.problems?.length > 0 && (
+                <div className="glass-panel p-6">
+                    <h3 className="mb-3 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        Lo que falla en tu CV
+                    </h3>
+                    <ul className="space-y-2">
+                        {result.problems.map((p, i) => (
+                            <li
+                                key={i}
+                                className="flex gap-3 rounded-xl border border-red-100 bg-red-50/40 px-4 py-3 text-sm text-slate-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-slate-200"
+                            >
+                                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                                <span>{p}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {result.top_improvements?.length > 0 && (
+                <div className="glass-panel p-6">
+                    <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        Mejoras concretas (antes → después)
+                    </h3>
+                    <div className="space-y-4">
+                        {result.top_improvements.map((imp, i) => (
+                            <div
+                                key={i}
+                                className="rounded-2xl border border-slate-100 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-900/60"
+                            >
+                                <div className="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    {imp.title}
+                                </div>
+                                {imp.before && (
+                                    <p className="text-sm text-slate-500 line-through dark:text-slate-500">
+                                        {imp.before}
+                                    </p>
+                                )}
+                                {imp.after && (
+                                    <p className="mt-1 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                                        → {imp.after}
+                                    </p>
+                                )}
+                                {imp.why && (
+                                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{imp.why}</p>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {result.missing_keywords?.length > 0 && (
+                <div className="glass-panel p-6">
+                    <h3 className="mb-3 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        Keywords que probablemente te faltan
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                        {result.missing_keywords.map((k) => (
+                            <span
+                                key={k}
+                                className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-100 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30"
+                            >
+                                {k}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <div className="glass-panel flex flex-col items-center gap-3 p-8 text-center">
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                    ¿Quieres cruzar tu CV con una oferta concreta?
+                </h3>
+                <p className="max-w-md text-sm text-slate-600 dark:text-slate-300">
+                    Crea una cuenta gratis y obtén un plan de ataque por cada oferta que te interese.
+                </p>
+                <div className="mt-2 flex flex-wrap justify-center gap-3">
+                    <button
+                        data-testid="result-create-account-btn"
+                        onClick={startGoogleLogin}
+                        className="btn-primary"
+                    >
+                        Crear cuenta gratis
+                        <ArrowRight className="h-4 w-4" />
+                    </button>
+                    <button
+                        data-testid="result-try-again-btn"
+                        onClick={onTryAgain}
+                        className="btn-ghost"
+                    >
+                        Analizar otro CV
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function MiniScore({ label, value }) {
+    const v = Number(value || 0);
+    return (
+        <div className="rounded-2xl border border-slate-100 bg-white/60 p-3 text-center dark:border-slate-800 dark:bg-slate-900/60">
+            <div className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 {label}
             </div>
-            <motion.div
-                initial={{ width: 0 }}
-                animate={{ width }}
-                transition={{ duration: 1.2, delay, ease: "easeOut" }}
-                className="h-2 rounded-full bg-gradient-to-r from-blue-400 to-emerald-400"
-            />
+            <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100">{v}</div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${v}%` }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
+                    className="h-full rounded-full bg-gradient-to-r from-blue-400 to-emerald-400"
+                />
+            </div>
+        </div>
+    );
+}
+
+function ScoreCircle({ value, label, large = false }) {
+    const v = Math.max(0, Math.min(100, Number(value) || 0));
+    const size = large ? 110 : 88;
+    const stroke = large ? 9 : 7;
+    const r = (size - stroke) / 2;
+    const c = 2 * Math.PI * r;
+    const dash = c * (v / 100);
+    const color = v >= 80 ? "#10B981" : v >= 60 ? "#3B82F6" : v >= 40 ? "#F59E0B" : "#EF4444";
+    return (
+        <div className="flex items-center gap-3" data-testid="score-circle">
+            <svg width={size} height={size} className="-rotate-90">
+                <circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={r}
+                    stroke="currentColor"
+                    strokeWidth={stroke}
+                    fill="none"
+                    className="text-slate-200 dark:text-slate-800"
+                />
+                <motion.circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={r}
+                    stroke={color}
+                    strokeWidth={stroke}
+                    fill="none"
+                    strokeLinecap="round"
+                    initial={{ strokeDasharray: `0 ${c}` }}
+                    animate={{ strokeDasharray: `${dash} ${c}` }}
+                    transition={{ duration: 1.0, ease: "easeOut" }}
+                />
+            </svg>
+            <div>
+                <div className="text-3xl font-semibold text-slate-900 dark:text-slate-100">{v}</div>
+                <div className="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    {label}
+                </div>
+            </div>
         </div>
     );
 }

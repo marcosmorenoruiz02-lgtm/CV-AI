@@ -2,6 +2,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import AuthCallback from "./pages/AuthCallback";
@@ -29,15 +30,22 @@ function AppRouter() {
     );
 }
 
+function ToasterWithTheme() {
+    const { theme } = useTheme();
+    return <Toaster position="top-right" richColors closeButton theme={theme} />;
+}
+
 function App() {
     return (
         <div className="App">
-            <BrowserRouter>
-                <AuthProvider>
-                    <AppRouter />
-                    <Toaster position="top-right" richColors closeButton />
-                </AuthProvider>
-            </BrowserRouter>
+            <ThemeProvider>
+                <BrowserRouter>
+                    <AuthProvider>
+                        <AppRouter />
+                        <ToasterWithTheme />
+                    </AuthProvider>
+                </BrowserRouter>
+            </ThemeProvider>
         </div>
     );
 }

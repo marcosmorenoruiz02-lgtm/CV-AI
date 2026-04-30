@@ -10,14 +10,12 @@ Modular layout:
 from __future__ import annotations
 
 import io
-import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import httpx
-from emergentintegrations.llm.chat import LlmChat, UserMessage
 from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel
 from pypdf import PdfReader
@@ -26,7 +24,9 @@ from starlette.middleware.cors import CORSMiddleware
 from api.analysis import router as analysis_router
 from api.cv_builder import router as cv_builder_router
 from api.job_import import router as job_import_router
-from deps import EMERGENT_LLM_KEY, User, WorkExperience, db, get_current_user
+from api.quick_analyze import router as quick_analyze_router
+from deps import User, WorkExperience, db, get_current_user
+from services.llm.client import call_json, call_text
 
 # ------------------------- APP SETUP -------------------------
 
@@ -211,34 +211,27 @@ async def upload_cv(file: UploadFile = File(...), user: User = Depends(get_curre
         "- experience: hasta 6 experiencias laborales ordenadas por recientes primero"
     )
 
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"cv-parse-{user.user_id}-{uuid.uuid4().hex[:6]}",
-        system_message=system,
-    ).with_model("openai", "gpt-5.2")
-
-    response_text = await chat.send_message(UserMessage(text=f"TEXTO DEL CV:\n\n{raw_text[:15000]}"))
-
-    cleaned = response_text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("```", 2)[1]
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:]
-        cleaned = cleaned.strip()
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3].strip()
-
     try:
-        parsed = json.loads(cleaned)
+        parsed = await call_json(
+            system,
+            f"TEXTO DEL CV:\n\n{raw_text[:15000]}",
+            session_id=f"cv-parse-{user.user_id}",
+            fallback={"name": user.name, "headline": "", "skills": [], "experience": []},
+        )
     except Exception as e:
-        logger.error("Failed to parse LLM JSON: %s | raw=%s", e, response_text[:500])
-        raise HTTPException(status_code=500, detail="No se pudo interpretar el CV")
+        logger.exception("CV parse failed")
+        raise HTTPException(
+            status_code=503,
+            detail=f"El motor de IA no pudo procesar el CV ahora mismo. Intenta de nuevo en unos segundos. ({e})",
+        )
+    if not isinstance(parsed, dict):
+        parsed = {}
 
     update = {
         "name": parsed.get("name") or user.name,
         "headline": parsed.get("headline", ""),
-        "skills": parsed.get("skills", [])[:20],
-        "experience": parsed.get("experience", [])[:8],
+        "skills": [str(s) for s in (parsed.get("skills") or [])][:20],
+        "experience": [e for e in (parsed.get("experience") or []) if isinstance(e, dict)][:8],
         "cv_raw_text": raw_text[:20000],
     }
     await db.users.update_one({"user_id": user.user_id}, {"$set": update})
@@ -248,27 +241,35 @@ async def upload_cv(file: UploadFile = File(...), user: User = Depends(get_curre
 
 # ------------------------- LEGACY ANALYSES (MVP markdown reports) -------------------------
 
-HEADHUNTER_SYSTEM_PROMPT = """Actúa como un Headhunter de élite y experto en algoritmos ATS. Tu misión es cruzar el CV del usuario con la Oferta de Empleo proporcionada para generar una estrategia de asalto ganadora.
+HEADHUNTER_SYSTEM_PROMPT = """Eres un coach de carrera que habla claro y sin rollos. Nada de lenguaje corporativo ni de frases vacías. Escribe como si estuvieras tomando un café con la persona y le explicaras, tal cual, cómo ganar este puesto.
 
-Genera un informe en MARKDOWN estructurado con los siguientes bloques, en este orden exacto. Usa ### para los títulos de bloque.
+Tu trabajo: cruzar su perfil con la oferta y darle un plan de ataque REAL, útil y directo.
 
-### 1. Radiografía del Puesto
-El problema real que la empresa quiere resolver al contratar este puesto. No repitas la oferta, LEE entre líneas.
+Genera un informe en MARKDOWN con estos 5 bloques exactos. Usa ### para cada título.
 
-### 2. Análisis de Gap
-- **Habilidades que faltan:** lista de habilidades explícitamente requeridas por la oferta que el CV NO menciona.
-- **Habilidades Transferibles:** mapea experiencias del CV que, aunque no coincidan 1:1, demuestran la competencia requerida. Explica CÓMO argumentarlas.
+### 1. Lo que realmente busca la empresa
+Olvida lo que dice la oferta entre líneas de marketing. ¿Qué problema están intentando resolver al contratar? ¿Por qué ahora? Dilo en 2-3 frases, como se lo contarías a un amigo.
 
-### 3. Optimización de Texto (ATS-ready)
-Reescribe el titular profesional y un resumen de 3-4 líneas del perfil usando las keywords críticas para superar el ATS. Entrega el texto listo para copiar.
+### 2. Dónde encajas y dónde flojeas
+- **Lo que tienes a favor:** 3-5 puntos concretos del perfil que son oro para esta oferta. Sin tecnicismos vacíos.
+- **Lo que puede flojear:** skills que piden y no están claras en el CV. Para cada una, una frase de cómo venderla con lo que sí tiene (habilidades transferibles). Lenguaje cercano, como si lo explicaras a alguien.
 
-### 4. Insider Advice
-Consejos sobre la cultura de la empresa (deducida del tono de la oferta), preguntas probables en la entrevista y el tono que debe proyectar el candidato.
+### 3. Tu CV, adaptado a este puesto
+Reescribe su titular profesional y un resumen de 3-4 frases usando las keywords importantes para superar el filtro ATS, pero que suene natural, no a plantilla de LinkedIn. Entrégalo listo para copiar.
 
-### 5. Estrategia de Asalto
-Un mensaje de contacto directo para LinkedIn (máximo 120 palabras), altamente persuasivo, personalizado al hiring manager, con un hook claro y un CTA suave. Entrega el texto listo para copiar dentro de un bloque > citado.
+### 4. Tips de la entrevista
+- Qué tipo de empresa es (intuido del tono de la oferta).
+- 2-3 preguntas que es MUY probable que le hagan.
+- El tono que le conviene proyectar (seguro, curioso, técnico, cercano...).
 
-Tono general: analítico, profesional, estratégico. En español. Nada de relleno. Nada de emojis."""
+### 5. Mensaje para romper el hielo en LinkedIn
+Un mensaje directo al hiring manager. Máximo 100 palabras, sin parecer template, sin adulación barata. Engancha en la primera línea y cierra con un CTA suave. Ponlo dentro de un bloque de cita (>) para que se pueda copiar tal cual.
+
+Reglas estrictas:
+- Tono: cercano, humano, directo. Nada de "sinergias", "proactividad" ni bullshit corporativo.
+- Escribe en español neutro, segunda persona del singular ("tú").
+- Cero emojis.
+- Cero relleno. Si no hay algo que decir en un bloque, dilo en una frase y punto."""
 
 
 def _format_profile_for_prompt(user: User) -> str:
@@ -301,23 +302,24 @@ async def create_analysis(payload: AnalysisCreate, user: User = Depends(get_curr
         )
 
     profile_block = _format_profile_for_prompt(user)
-    user_text = (
+    chat_text = (
         f"{profile_block}\n\n"
         f"OFERTA DE EMPLEO:\n{payload.job_description}\n\n"
         f"Genera ahora el informe completo siguiendo la estructura indicada."
     )
 
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"analysis-{user.user_id}-{uuid.uuid4().hex[:6]}",
-        system_message=HEADHUNTER_SYSTEM_PROMPT,
-    ).with_model("openai", "gpt-5.2")
-
     try:
-        report = await chat.send_message(UserMessage(text=user_text))
+        report = await call_text(
+            HEADHUNTER_SYSTEM_PROMPT,
+            chat_text,
+            session_id=f"analysis-{user.user_id}",
+        )
     except Exception as e:
         logger.exception("LLM analysis failed")
-        raise HTTPException(status_code=502, detail=f"El motor de IA no pudo responder: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"El motor de IA no pudo generar el informe. Intenta de nuevo en unos segundos. ({e})",
+        )
 
     analysis_id = f"a_{uuid.uuid4().hex[:12]}"
     now = datetime.now(timezone.utc)
@@ -377,6 +379,7 @@ app.include_router(api_router)
 app.include_router(analysis_router)        # /api/analyze
 app.include_router(cv_builder_router)      # /api/cv/build, /api/cv/questionnaire, /api/cv/list
 app.include_router(job_import_router)      # /api/job/import
+app.include_router(quick_analyze_router)   # /api/quick-analyze (anonymous)
 
 import os
 

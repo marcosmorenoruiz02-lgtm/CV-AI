@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import ProfileTab from "../components/ProfileTab";
 import AnalysisTab from "../components/AnalysisTab";
 import HistoryTab from "../components/HistoryTab";
+import ThemeToggle from "../components/ThemeToggle";
 
 const TABS = [
     { id: "analysis", label: "Análisis", icon: Sparkles },
@@ -41,8 +42,9 @@ export default function Dashboard() {
                     </Link>
 
                     <div className="flex items-center gap-3">
+                        <ThemeToggle />
                         <div
-                            className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white/70 px-3 py-1.5 backdrop-blur-sm sm:flex"
+                            className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white/70 px-3 py-1.5 backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/70 sm:flex"
                             data-testid="user-chip"
                         >
                             {user.picture ? (
@@ -52,11 +54,11 @@ export default function Dashboard() {
                                     className="h-6 w-6 rounded-full"
                                 />
                             ) : (
-                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-200">
                                     {user.name?.[0] || "U"}
                                 </div>
                             )}
-                            <span className="text-sm font-medium text-slate-700">{user.name}</span>
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{user.name}</span>
                         </div>
                         <button
                             data-testid="logout-btn"
