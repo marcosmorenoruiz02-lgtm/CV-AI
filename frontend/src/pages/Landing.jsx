@@ -10,6 +10,8 @@ import {
     CheckCircle2,
     FileText,
     Zap,
+    Link as LinkIcon,
+    Briefcase,
 } from "lucide-react";
 import axios from "axios";
 import ThemeToggle from "../components/ThemeToggle";
@@ -26,6 +28,9 @@ export default function Landing() {
     const [result, setResult] = useState(null);
     const [error, setError] = useState("");
     const [dragOver, setDragOver] = useState(false);
+    const [jobUrl, setJobUrl] = useState("");
+    const [jobText, setJobText] = useState("");
+    const [jobMode, setJobMode] = useState("none"); // none | url | text
     const fileRef = useRef(null);
 
     const onUpload = async (file) => {
@@ -35,8 +40,8 @@ export default function Landing() {
             setView("error");
             return;
         }
-        if (file.size > 8 * 1024 * 1024) {
-            setError("Tu PDF supera los 8 MB. Comprímelo y vuelve a subirlo.");
+        if (file.size > 50 * 1024 * 1024) {
+            setError("Tu PDF supera los 50 MB. Comprímelo y vuelve a subirlo.");
             setView("error");
             return;
         }
@@ -44,10 +49,12 @@ export default function Landing() {
         setError("");
         const fd = new FormData();
         fd.append("file", file);
+        if (jobMode === "url" && jobUrl.trim()) fd.append("job_url", jobUrl.trim());
+        if (jobMode === "text" && jobText.trim()) fd.append("job_text", jobText.trim());
         try {
             const { data } = await axios.post(`${API}/quick-analyze`, fd, {
                 headers: { "Content-Type": "multipart/form-data" },
-                timeout: 90000,
+                timeout: 120000,
             });
             setResult(data);
             setView("result");
@@ -142,6 +149,12 @@ export default function Landing() {
                                     setDragOver={setDragOver}
                                     onUpload={onUpload}
                                     onDrop={onDrop}
+                                    jobUrl={jobUrl}
+                                    setJobUrl={setJobUrl}
+                                    jobText={jobText}
+                                    setJobText={setJobText}
+                                    jobMode={jobMode}
+                                    setJobMode={setJobMode}
                                 />
                             </div>
                         </motion.section>
@@ -162,9 +175,11 @@ export default function Landing() {
                                     Analizando tu CV...
                                 </h2>
                                 <p className="mt-2 text-slate-600 dark:text-slate-300">
-                                    Mirándolo como lo haría un ATS y un reclutador a la vez.
+                                    {jobMode !== "none"
+                                        ? "Estamos leyendo la oferta de empleo por ti... ¡Danos un segundo!"
+                                        : "Mirándolo como lo haría un ATS y un reclutador a la vez."}
                                 </p>
-                                <ProgressLoader />
+                                <ProgressLoader withJob={jobMode !== "none"} />
                             </div>
                         </motion.section>
                     )}
@@ -295,7 +310,19 @@ export default function Landing() {
     );
 }
 
-function UploadCard({ fileRef, dragOver, setDragOver, onUpload, onDrop }) {
+function UploadCard({
+    fileRef,
+    dragOver,
+    setDragOver,
+    onUpload,
+    onDrop,
+    jobUrl,
+    setJobUrl,
+    jobText,
+    setJobText,
+    jobMode,
+    setJobMode,
+}) {
     return (
         <div className="glass-panel p-6">
             <div className="mb-4 flex items-center gap-2">
@@ -335,9 +362,83 @@ function UploadCard({ fileRef, dragOver, setDragOver, onUpload, onDrop }) {
                     Arrastra el PDF aquí o haz clic
                 </p>
                 <span className="mt-5 inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
-                    <FileText className="h-3.5 w-3.5" /> Solo PDF · máx. 8 MB
+                    <FileText className="h-3.5 w-3.5" /> Solo PDF · máx. 50 MB
                 </span>
             </div>
+
+            <div className="mt-4">
+                <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                        ¿Lo quieres comparar con una oferta?
+                    </span>
+                    {jobMode !== "none" && (
+                        <button
+                            data-testid="clear-job-btn"
+                            onClick={() => {
+                                setJobMode("none");
+                                setJobUrl("");
+                                setJobText("");
+                            }}
+                            className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        >
+                            quitar
+                        </button>
+                    )}
+                </div>
+                <div className="flex gap-2 rounded-2xl bg-slate-100/70 p-1 dark:bg-slate-800/60">
+                    {[
+                        { id: "none", label: "No comparar" },
+                        { id: "url", label: "Pegar URL" },
+                        { id: "text", label: "Pegar texto" },
+                    ].map((opt) => (
+                        <button
+                            key={opt.id}
+                            data-testid={`job-mode-${opt.id}`}
+                            onClick={() => setJobMode(opt.id)}
+                            className={`flex-1 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
+                                jobMode === opt.id
+                                    ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white"
+                                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                            }`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
+
+                {jobMode === "url" && (
+                    <div className="mt-3 space-y-1">
+                        <div className="relative">
+                            <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                            <input
+                                data-testid="hero-job-url-input"
+                                type="url"
+                                className="input-soft !pl-9 !py-2.5 text-sm"
+                                placeholder="https://linkedin.com/jobs/view/..."
+                                value={jobUrl}
+                                onChange={(e) => setJobUrl(e.target.value)}
+                            />
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            LinkedIn, InfoJobs, Indeed... la leemos por ti.
+                        </p>
+                    </div>
+                )}
+
+                {jobMode === "text" && (
+                    <div className="mt-3 space-y-1">
+                        <textarea
+                            data-testid="hero-job-text-input"
+                            rows={5}
+                            className="textarea-soft !min-h-[120px] text-sm"
+                            placeholder="Pega aquí la descripción completa de la oferta..."
+                            value={jobText}
+                            onChange={(e) => setJobText(e.target.value)}
+                        />
+                    </div>
+                )}
+            </div>
+
             <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>No guardamos tu CV en este modo</span>
                 <button
@@ -352,10 +453,21 @@ function UploadCard({ fileRef, dragOver, setDragOver, onUpload, onDrop }) {
     );
 }
 
-function ProgressLoader() {
+function ProgressLoader({ withJob = false }) {
+    const labels = withJob
+        ? [
+              "Leyendo el PDF...",
+              "Leyendo la oferta de empleo...",
+              "Cruzando tu CV con la oferta...",
+          ]
+        : [
+              "Leyendo el PDF...",
+              "Extrayendo experiencia y skills...",
+              "Calculando score ATS...",
+          ];
     return (
         <div className="mt-6 space-y-3 text-left">
-            {["Leyendo el PDF...", "Extrayendo experiencia y skills...", "Calculando score ATS..."].map((label, i) => (
+            {labels.map((label, i) => (
                 <div key={label} className="space-y-1">
                     <div className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
                         {label}
@@ -512,6 +624,107 @@ function ResultPanel({ result, onTryAgain }) {
                             </span>
                         ))}
                     </div>
+                </div>
+            )}
+
+            {result.job_match && (
+                <div className="glass-panel p-6" data-testid="job-match-panel">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                            <span className="badge-success">
+                                <Briefcase className="h-4 w-4" /> Match con la oferta
+                            </span>
+                            <h3 className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                                {result.job?.job_title || "Oferta analizada"}
+                                {result.job?.company ? (
+                                    <span className="text-slate-500 dark:text-slate-400"> · {result.job.company}</span>
+                                ) : null}
+                            </h3>
+                            {result.job?.source_url && (
+                                <a
+                                    href={result.job.source_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
+                                >
+                                    Ver oferta original
+                                </a>
+                            )}
+                        </div>
+                        <ScoreCircle value={result.job_match.match_score} label="Encaje" />
+                    </div>
+                    {result.job_match.explicacion && (
+                        <p className="mb-4 text-slate-700 dark:text-slate-200">{result.job_match.explicacion}</p>
+                    )}
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        {result.job_match.matching_skills?.length > 0 && (
+                            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                                <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                                    Lo que sí cumples
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {result.job_match.matching_skills.map((s) => (
+                                        <span
+                                            key={s}
+                                            className="rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-200 dark:ring-emerald-700/40"
+                                        >
+                                            {s}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {result.job_match.missing_skills?.length > 0 && (
+                            <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+                                <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                                    Lo que te falta
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {result.job_match.missing_skills.map((s) => (
+                                        <span
+                                            key={s}
+                                            className="rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/60 dark:text-amber-200 dark:ring-amber-700/40"
+                                        >
+                                            {s}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    {result.job_match.critical_gaps?.length > 0 && (
+                        <div className="mt-4">
+                            <h4 className="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                Lo que más te juega en contra
+                            </h4>
+                            <ul className="space-y-2">
+                                {result.job_match.critical_gaps.map((g, i) => (
+                                    <li
+                                        key={i}
+                                        className="flex gap-3 rounded-xl border border-red-100 bg-red-50/40 px-4 py-2.5 text-sm text-slate-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-slate-200"
+                                    >
+                                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                                        <span>{g}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                    {result.job_match.recommendations?.length > 0 && (
+                        <div className="mt-4">
+                            <h4 className="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                Cómo aumentar tus opciones
+                            </h4>
+                            <ul className="space-y-1.5 text-sm text-slate-700 dark:text-slate-300">
+                                {result.job_match.recommendations.map((r, i) => (
+                                    <li key={i} className="flex gap-2">
+                                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                                        <span>{r}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                 </div>
             )}
 
