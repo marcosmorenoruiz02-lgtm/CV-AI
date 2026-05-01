@@ -10,13 +10,30 @@ Rules baked into every prompt:
 # Suffix appended to any prompt whose output contains user-facing text.
 SIMPLE_LANGUAGE_RULES = """
 Reglas de lenguaje (CRÍTICAS, aplican a cualquier campo textual visible para el usuario):
-- Escribe como si hablaras con alguien que busca trabajo y NO es experto técnico.
-- Frases cortas. Nada de pasivas ni "se recomienda".
-- Evita tecnicismos: si tienes que usar uno, explícalo entre paréntesis (breve).
-- Ejemplo bueno: "Tu CV está bien pero las empresas tienen un robot que lo lee antes que una persona: ese robot no entiende frases como 'responsable de...'. Cámbialo por lo que lograste."
-- Ejemplo malo: "Optimización semántica del perfil para alineamiento con ATS."
-- Tono: cercano, directo, humano. En español neutro, segunda persona del singular ("tú").
-- Cero emojis. Cero relleno.
+
+NIVEL DE LENGUAJE: como si hablaras con un amigo de 18 años buscando su primer trabajo. Que lo entienda alguien sin estudios técnicos.
+
+PROHIBIDO usar estas palabras (o variantes): "ATS", "algoritmo", "parser", "stack", "branding", "métricas KPI", "escalabilidad", "sinergia", "valor añadido", "leverage", "stakeholders", "alineamiento", "optimización semántica", "densidad de keywords".
+
+Si necesitas mencionar algo técnico, EXPLÍCALO entre paréntesis con una analogía simple.
+
+EJEMPLOS:
+✅ Bueno: "Las empresas usan un robot que lee tu CV antes que una persona. Si tu CV no le gusta al robot, no llegas ni a la entrevista."
+❌ Malo: "Optimización del CV para algoritmos ATS de pre-screening."
+
+✅ Bueno: "Cambia 'responsable de ventas' por 'subí las ventas un 30%'. Suena mucho mejor."
+❌ Malo: "Reformular bullets pasivos a logros cuantificables."
+
+✅ Bueno: "Te falta poner que sabes Excel. La oferta lo pide y es fácil de añadir."
+❌ Malo: "Gap crítico identificado: ausencia de Excel en stack declarado."
+
+REGLAS DURAS:
+- Frases cortas (máximo 15 palabras por frase).
+- Voz activa siempre (NUNCA pasivas como "se recomienda" o "ha sido detectado").
+- Tutea siempre ("tú", "tu CV"). Nada de "el candidato" o "el usuario".
+- Cero emojis.
+- Cero relleno: si una frase no aporta, bórrala.
+- Si tienes que dar un consejo, ponlo como una orden amable: "Cambia esto", "Añade aquello".
 """.strip()
 
 

@@ -729,6 +729,114 @@ function ResultPanel({ result, onTryAgain }) {
             )}
 
             <div className="glass-panel flex flex-col items-center gap-3 p-8 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
+                    <Sparkles className="h-6 w-6" strokeWidth={1.6} />
+                </div>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                    ¿Quieres que te lo reescriba?
+                </h3>
+                <p className="max-w-md text-sm text-slate-600 dark:text-slate-300">
+                    Te dejamos un texto listo para copiar, con verbos potentes y resultados concretos. Gratis.
+                </p>
+                <button
+                    data-testid="optimize-btn"
+                    onClick={onOptimize}
+                    disabled={optimizing}
+                    className="btn-primary mt-2"
+                >
+                    {optimizing ? (
+                        <>
+                            <Loader2 className="h-4 w-4 animate-spin" /> Reescribiendo...
+                        </>
+                    ) : (
+                        <>
+                            <Sparkles className="h-4 w-4" /> Reescríbelo por mí
+                        </>
+                    )}
+                </button>
+                {optError && <p className="text-xs text-red-500">{optError}</p>}
+            </div>
+
+            {optimized && (
+                <div className="glass-panel p-6" data-testid="optimized-panel">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <span className="badge-success">
+                                <CheckCircle2 className="h-4 w-4" /> Versión reescrita
+                            </span>
+                            <h3 className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                                Tu CV con verbos de impacto
+                            </h3>
+                        </div>
+                        <button
+                            onClick={copyCV}
+                            data-testid="copy-optimized-btn"
+                            className="btn-ghost !py-2 !px-4 text-sm"
+                        >
+                            {copied ? (
+                                <>
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Copiado
+                                </>
+                            ) : (
+                                <>
+                                    <FileText className="h-4 w-4" /> Copiar todo
+                                </>
+                            )}
+                        </button>
+                    </div>
+                    {optimized.improved_summary && (
+                        <div className="mb-4">
+                            <h4 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                                Resumen profesional
+                            </h4>
+                            <p className="rounded-2xl border border-slate-100 bg-white/60 p-4 text-sm leading-relaxed text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-200">
+                                {optimized.improved_summary}
+                            </p>
+                        </div>
+                    )}
+                    {optimized.optimized_experience?.length > 0 && (
+                        <div className="mb-4 space-y-3">
+                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                                Experiencia con verbos potentes
+                            </h4>
+                            {optimized.optimized_experience.map((exp, i) => (
+                                <div
+                                    key={i}
+                                    className="rounded-2xl border border-slate-100 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-900/60"
+                                >
+                                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                                        {exp.role}
+                                        {exp.company ? ` · ${exp.company}` : ""}
+                                    </p>
+                                    {exp.period && (
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">{exp.period}</p>
+                                    )}
+                                    <ul className="mt-2 space-y-1.5">
+                                        {exp.bullets?.map((b, j) => (
+                                            <li key={j} className="flex gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-400" />
+                                                <span>{b}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {optimized.optimized_cv_text && (
+                        <div>
+                            <h4 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                                CV completo (para copiar)
+                            </h4>
+                            <pre className="max-h-[400px] overflow-auto rounded-2xl border border-slate-100 bg-slate-50 p-4 text-xs leading-relaxed text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                                {optimized.optimized_cv_text}
+                            </pre>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            <div className="glass-panel flex flex-col items-center gap-3 p-8 text-center">
                 <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
                     ¿Quieres cruzar tu CV con una oferta concreta?
                 </h3>
