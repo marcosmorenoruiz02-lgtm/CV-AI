@@ -113,7 +113,7 @@ export default function AnalysisTab({ goToHistory }) {
                         ) : (
                             <>
                                 <Sparkles className="h-5 w-5" />
-                                Generar Estrategia de Asalto
+                                Optimizar mi CV para esta oferta
                             </>
                         )}
                     </motion.button>
@@ -188,7 +188,7 @@ function EmptyReport() {
                 Tu informe aparecerá aquí
             </h3>
             <p className="max-w-sm text-sm text-slate-500">
-                Pega una oferta y pulsa "Generar Estrategia de Asalto" para recibir un análisis
+                Pega una oferta y pulsa "Optimizar mi CV para esta oferta" para recibir un análisis
                 estructurado en segundos.
             </p>
         </div>

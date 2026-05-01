@@ -139,6 +139,7 @@ class QuickAnalysisResult(BaseModel):
     strengths: List[str] = []
     weak_signals: List[str] = []
     cv_excerpt: str = ""
+    cv_full_text: str = ""   # the cleaned text we send to the optimizer
     pages_read: int = 0
     # Optional job-match section (populated only when job_url is provided)
     job: Optional[NormalizedJob] = None
@@ -381,6 +382,7 @@ async def quick_analyze(
             strengths=_str_list(parsed.get("strengths"), 6),
             weak_signals=_str_list(parsed.get("weak_signals"), 6),
             cv_excerpt=raw_text[:500],
+            cv_full_text=raw_text[:12000],
             pages_read=pages_read,
         )
 

@@ -37,7 +37,7 @@ export default function Dashboard() {
                             <Target className="h-5 w-5" strokeWidth={2} />
                         </div>
                         <span className="font-[Outfit] text-lg font-semibold text-slate-900">
-                            Estrategia de Asalto
+                            CVBoost
                         </span>
                     </Link>
 

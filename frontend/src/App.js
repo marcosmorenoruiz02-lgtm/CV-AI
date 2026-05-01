@@ -6,17 +6,18 @@ import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import AuthCallback from "./pages/AuthCallback";
+import Bookmarklet from "./pages/Bookmarklet";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function AppRouter() {
     const location = useLocation();
-    // Synchronous detection of OAuth callback fragment - prevents race conditions.
     if (location.hash?.includes("session_id=")) {
         return <AuthCallback />;
     }
     return (
         <Routes>
             <Route path="/" element={<Landing />} />
+            <Route path="/bookmarklet" element={<Bookmarklet />} />
             <Route
                 path="/dashboard"
                 element={

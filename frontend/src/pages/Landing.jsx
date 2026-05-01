@@ -33,6 +33,18 @@ export default function Landing() {
     const [jobMode, setJobMode] = useState("none"); // none | url | text
     const fileRef = useRef(null);
 
+    // Pre-load oferta from bookmarklet (?job_text=...&from=bookmarklet)
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const t = params.get("job_text");
+        if (t && t.trim().length > 50) {
+            setJobMode("text");
+            setJobText(t.slice(0, 12000));
+            // Clean URL so the param doesn't stay
+            window.history.replaceState(null, "", window.location.pathname);
+        }
+    }, []);
+
     const onUpload = async (file) => {
         if (!file) return;
         if (!file.name.toLowerCase().endsWith(".pdf")) {
@@ -91,7 +103,7 @@ export default function Landing() {
                             <Target className="h-5 w-5" strokeWidth={2} />
                         </div>
                         <span className="font-[Outfit] text-lg font-semibold text-slate-900 dark:text-slate-100">
-                            Estrategia de Asalto
+                            CVBoost
                         </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -123,21 +135,27 @@ export default function Landing() {
                                     <Zap className="h-4 w-4" /> Análisis gratis · sin registro
                                 </span>
                                 <h1 className="mt-5 text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-5xl lg:text-6xl">
-                                    Tu CV no pasa los{" "}
+                                    Tu CV no está{" "}
                                     <span className="relative inline-block">
-                                        <span className="relative z-10 text-[#3B82F6]">filtros ATS</span>
+                                        <span className="relative z-10 text-[#3B82F6]">funcionando</span>
                                         <span className="absolute bottom-1 left-0 right-0 z-0 h-3 rounded-md bg-blue-100/80 dark:bg-blue-500/20" />
                                     </span>
                                     .
                                 </h1>
                                 <p className="mt-5 max-w-xl text-lg leading-relaxed text-slate-600 dark:text-slate-300">
-                                    Te decimos por qué y cómo arreglarlo en 30 segundos. Sin login, sin
-                                    rollos.
+                                    CVBoost analiza tu CV y te dice cómo mejorarlo para conseguir más entrevistas.
                                 </p>
-                                <div className="mt-6 hidden items-center gap-2 lg:flex">
-                                    <ArrowRight className="h-4 w-4 text-blue-500" />
+                                <div className="mt-6 flex flex-wrap items-center gap-4">
+                                    <button
+                                        data-testid="hero-cta-btn"
+                                        onClick={() => fileRef.current?.click()}
+                                        className="btn-primary !py-3.5 !px-7 text-base"
+                                    >
+                                        <UploadCloud className="h-5 w-5" />
+                                        Sube tu CV gratis
+                                    </button>
                                     <span className="text-sm text-slate-500 dark:text-slate-400">
-                                        Suelta tu CV en el panel de la derecha
+                                        Tu CV se analiza en segundos. No necesitas registrarte.
                                     </span>
                                 </div>
                             </div>
@@ -302,8 +320,15 @@ export default function Landing() {
             </main>
 
             <footer className="border-t border-slate-200/60 py-8 dark:border-slate-800/60">
-                <div className="mx-auto max-w-7xl px-6 text-sm text-slate-500 dark:text-slate-400">
-                    © {new Date().getFullYear()} Estrategia de Asalto · Hecho para quienes juegan a ganar.
+                <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 text-sm text-slate-500 dark:text-slate-400">
+                    <span>© {new Date().getFullYear()} CVBoost · El CV que sí abre puertas.</span>
+                    <a
+                        href="/bookmarklet"
+                        className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
+                        data-testid="footer-bookmarklet-link"
+                    >
+                        Importa ofertas con 1 click →
+                    </a>
                 </div>
             </footer>
         </div>
@@ -526,8 +551,48 @@ function FakePreview() {
 }
 
 function ResultPanel({ result, onTryAgain }) {
+    const [optimizing, setOptimizing] = useState(false);
+    const [optimized, setOptimized] = useState(null);
+    const [optError, setOptError] = useState("");
+    const [copied, setCopied] = useState(false);
     const score = result.final_score ?? 0;
     const tone = score >= 80 ? "Excelente" : score >= 60 ? "Aceptable" : score >= 40 ? "Mejorable" : "Necesita arreglos";
+
+    const onOptimize = async () => {
+        setOptimizing(true);
+        setOptError("");
+        try {
+            const cvText =
+                result.cv_full_text ||
+                `${result.cv_excerpt || ""}\n\n${result.personal_brand || ""}`;
+            const { data } = await axios.post(
+                `${API}/optimize-cv`,
+                { cv_text: cvText, target_role: result.detected_role || null },
+                { timeout: 120000 },
+            );
+            setOptimized(data);
+            setTimeout(() => {
+                document
+                    .querySelector('[data-testid="optimized-panel"]')
+                    ?.scrollIntoView({ behavior: "smooth" });
+            }, 100);
+        } catch (err) {
+            setOptError(
+                err?.response?.data?.detail ||
+                    "No pudimos reescribirlo ahora mismo. Inténtalo en unos segundos.",
+            );
+        } finally {
+            setOptimizing(false);
+        }
+    };
+
+    const copyCV = async () => {
+        if (!optimized?.optimized_cv_text) return;
+        await navigator.clipboard.writeText(optimized.optimized_cv_text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
     return (
         <div className="space-y-6">
             <div className="glass-panel p-6">
@@ -547,8 +612,10 @@ function ResultPanel({ result, onTryAgain }) {
                     </div>
                     <ScoreCircle value={score} label={tone} large />
                 </div>
-                {result.summary && (
-                    <p className="mt-5 text-slate-700 dark:text-slate-200">{result.summary}</p>
+                {(result.explicacion || result.summary) && (
+                    <p className="mt-5 text-slate-700 dark:text-slate-200">
+                        {result.explicacion || result.summary}
+                    </p>
                 )}
                 <div className="mt-5 grid grid-cols-3 gap-3">
                     <MiniScore label="ATS" value={result.ats_score} />
@@ -557,13 +624,13 @@ function ResultPanel({ result, onTryAgain }) {
                 </div>
             </div>
 
-            {result.problems?.length > 0 && (
+            {(result.errores_clave?.length > 0 || result.problems?.length > 0) && (
                 <div className="glass-panel p-6">
                     <h3 className="mb-3 text-lg font-semibold text-slate-900 dark:text-slate-100">
                         Lo que falla en tu CV
                     </h3>
                     <ul className="space-y-2">
-                        {result.problems.map((p, i) => (
+                        {(result.errores_clave?.length ? result.errores_clave : result.problems).map((p, i) => (
                             <li
                                 key={i}
                                 className="flex gap-3 rounded-xl border border-red-100 bg-red-50/40 px-4 py-3 text-sm text-slate-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-slate-200"
@@ -576,13 +643,13 @@ function ResultPanel({ result, onTryAgain }) {
                 </div>
             )}
 
-            {result.top_improvements?.length > 0 && (
+            {(result.ejemplo_mejora?.length > 0 || result.top_improvements?.length > 0) && (
                 <div className="glass-panel p-6">
                     <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
                         Mejoras concretas (antes → después)
                     </h3>
                     <div className="space-y-4">
-                        {result.top_improvements.map((imp, i) => (
+                        {(result.ejemplo_mejora?.length ? result.ejemplo_mejora : result.top_improvements).map((imp, i) => (
                             <div
                                 key={i}
                                 className="rounded-2xl border border-slate-100 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-900/60"
