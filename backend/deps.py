@@ -5,7 +5,7 @@ Centralised here to avoid circular imports with server.py.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -25,6 +25,11 @@ _client = AsyncIOMotorClient(MONGO_URL)
 db = _client[DB_NAME]
 
 
+# --------- Tier limits ---------
+
+FREE_DAILY_LIMIT = 3
+
+
 class WorkExperience(BaseModel):
     role: str = ""
     company: str = ""
@@ -41,8 +46,59 @@ class User(BaseModel):
     skills: List[str] = []
     experience: List[WorkExperience] = []
     cv_raw_text: str = ""
-    mode: str = "professional"  # "junior" | "professional"
+    mode: str = "professional"             # "junior" | "professional"
+    tier: str = "FREE"                     # "FREE" | "PRO"
+    daily_analyses_count: int = 0
+    last_analysis_date: Optional[str] = None  # ISO date string (UTC)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+def _today_utc_iso() -> str:
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+async def enforce_daily_limit(user_id: str) -> dict:
+    """Reset count if a new UTC day, then enforce FREE-tier limit. Returns the live user doc.
+
+    Pure server-side time check (UTC) — los usuarios no pueden saltarse el límite cambiando
+    su reloj local porque toda la lógica usa la hora del servidor.
+    """
+    today = _today_utc_iso()
+
+    # 1) Reset if the stored date is not today (either older or null).
+    await db.users.update_one(
+        {"user_id": user_id, "last_analysis_date": {"$ne": today}},
+        {"$set": {"daily_analyses_count": 0, "last_analysis_date": today}},
+    )
+
+    # 2) Re-read fresh user state.
+    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    tier = (user_doc.get("tier") or "FREE").upper()
+    count = int(user_doc.get("daily_analyses_count") or 0)
+
+    if tier == "FREE" and count >= FREE_DAILY_LIMIT:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Has llegado al límite diario gratuito "
+                f"({FREE_DAILY_LIMIT} análisis). Actualiza a Pro para análisis ilimitados."
+            ),
+        )
+    return user_doc
+
+
+async def increment_analysis_count(user_id: str) -> None:
+    """Atomically bump the user's daily counter (after a successful AI call)."""
+    await db.users.update_one(
+        {"user_id": user_id},
+        {
+            "$inc": {"daily_analyses_count": 1},
+            "$set": {"last_analysis_date": _today_utc_iso()},
+        },
+    )
 
 
 async def get_current_user(request: Request) -> User:
@@ -73,4 +129,7 @@ async def get_current_user(request: Request) -> User:
     if isinstance(user_doc.get("created_at"), str):
         user_doc["created_at"] = datetime.fromisoformat(user_doc["created_at"])
     user_doc.setdefault("mode", "professional")
+    user_doc.setdefault("tier", "FREE")
+    user_doc.setdefault("daily_analyses_count", 0)
+    user_doc.setdefault("last_analysis_date", None)
     return User(**user_doc)

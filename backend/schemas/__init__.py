@@ -1,5 +1,5 @@
 """Pydantic schemas package."""
-from .user_mode import UserMode
+from .user_mode import UserMode, UserTier
 from .cv import (
     CVBuildInput,
     CVBuilderEducation,
@@ -14,6 +14,7 @@ from .scoring import AnalyzeInput, AnalyzeOutput, ScoringBreakdown
 
 __all__ = [
     "UserMode",
+    "UserTier",
     "CVBuildInput",
     "CVBuilderEducation",
     "CVBuilderExperience",

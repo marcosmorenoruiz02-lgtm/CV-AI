@@ -10,7 +10,6 @@ import {
     CheckCircle2,
     FileText,
     Zap,
-    Link as LinkIcon,
     Briefcase,
 } from "lucide-react";
 import axios from "axios";
@@ -28,19 +27,17 @@ export default function Landing() {
     const [result, setResult] = useState(null);
     const [error, setError] = useState("");
     const [dragOver, setDragOver] = useState(false);
-    const [jobUrl, setJobUrl] = useState("");
     const [jobText, setJobText] = useState("");
-    const [jobMode, setJobMode] = useState("none"); // none | url | text
+    const [jobMode, setJobMode] = useState("none"); // none | text
     const fileRef = useRef(null);
 
-    // Pre-load oferta from bookmarklet (?job_text=...&from=bookmarklet)
+    // Pre-load oferta from bookmarklet/extension (?job_text=...&from=...)
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const t = params.get("job_text");
         if (t && t.trim().length > 50) {
             setJobMode("text");
             setJobText(t.slice(0, 12000));
-            // Clean URL so the param doesn't stay
             window.history.replaceState(null, "", window.location.pathname);
         }
     }, []);
@@ -61,7 +58,6 @@ export default function Landing() {
         setError("");
         const fd = new FormData();
         fd.append("file", file);
-        if (jobMode === "url" && jobUrl.trim()) fd.append("job_url", jobUrl.trim());
         if (jobMode === "text" && jobText.trim()) fd.append("job_text", jobText.trim());
         try {
             const { data } = await axios.post(`${API}/quick-analyze`, fd, {
@@ -167,8 +163,6 @@ export default function Landing() {
                                     setDragOver={setDragOver}
                                     onUpload={onUpload}
                                     onDrop={onDrop}
-                                    jobUrl={jobUrl}
-                                    setJobUrl={setJobUrl}
                                     jobText={jobText}
                                     setJobText={setJobText}
                                     jobMode={jobMode}
@@ -341,8 +335,6 @@ function UploadCard({
     setDragOver,
     onUpload,
     onDrop,
-    jobUrl,
-    setJobUrl,
     jobText,
     setJobText,
     jobMode,
@@ -401,7 +393,6 @@ function UploadCard({
                             data-testid="clear-job-btn"
                             onClick={() => {
                                 setJobMode("none");
-                                setJobUrl("");
                                 setJobText("");
                             }}
                             className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
@@ -413,8 +404,7 @@ function UploadCard({
                 <div className="flex gap-2 rounded-2xl bg-slate-100/70 p-1 dark:bg-slate-800/60">
                     {[
                         { id: "none", label: "No comparar" },
-                        { id: "url", label: "Pegar URL" },
-                        { id: "text", label: "Pegar texto" },
+                        { id: "text", label: "Pegar oferta" },
                     ].map((opt) => (
                         <button
                             key={opt.id}
@@ -431,25 +421,6 @@ function UploadCard({
                     ))}
                 </div>
 
-                {jobMode === "url" && (
-                    <div className="mt-3 space-y-1">
-                        <div className="relative">
-                            <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                            <input
-                                data-testid="hero-job-url-input"
-                                type="url"
-                                className="input-soft !pl-9 !py-2.5 text-sm"
-                                placeholder="https://linkedin.com/jobs/view/..."
-                                value={jobUrl}
-                                onChange={(e) => setJobUrl(e.target.value)}
-                            />
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                            LinkedIn, InfoJobs, Indeed... la leemos por ti.
-                        </p>
-                    </div>
-                )}
-
                 {jobMode === "text" && (
                     <div className="mt-3 space-y-1">
                         <textarea
@@ -460,6 +431,12 @@ function UploadCard({
                             value={jobText}
                             onChange={(e) => setJobText(e.target.value)}
                         />
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Tip: con la extensión de Chrome se rellena solo. {" "}
+                            <a href="/bookmarklet" className="text-blue-600 underline-offset-2 hover:underline dark:text-blue-300">
+                                Instalar
+                            </a>
+                        </p>
                     </div>
                 )}
             </div>

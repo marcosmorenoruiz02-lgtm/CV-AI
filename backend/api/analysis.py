@@ -9,7 +9,7 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from deps import User, db, get_current_user
+from deps import User, db, enforce_daily_limit, get_current_user, increment_analysis_count
 from schemas.cv import StructuredCV
 from schemas.job import JobSkill, StructuredJob
 from schemas.scoring import AnalyzeInput, AnalyzeOutput, ScoringBreakdown
@@ -95,21 +95,21 @@ def _safe_job(parsed: Dict) -> StructuredJob:
     )
 
 
-async def _extract_cv(cv_text: str) -> StructuredCV:
+async def _extract_cv(cv_text: str, tier: str | None = None) -> StructuredCV:
     parsed = await call_json(
-        CV_EXTRACTION_SYSTEM, f"TEXTO DEL CV:\n\n{cv_text[:18000]}", fallback={}
+        CV_EXTRACTION_SYSTEM, f"TEXTO DEL CV:\n\n{cv_text[:18000]}", fallback={}, tier=tier,
     )
     return _safe_cv(parsed)
 
 
-async def _extract_job(job_text: str) -> StructuredJob:
+async def _extract_job(job_text: str, tier: str | None = None) -> StructuredJob:
     parsed = await call_json(
-        JOB_EXTRACTION_SYSTEM, f"TEXTO DE LA OFERTA:\n\n{job_text[:18000]}", fallback={}
+        JOB_EXTRACTION_SYSTEM, f"TEXTO DE LA OFERTA:\n\n{job_text[:18000]}", fallback={}, tier=tier,
     )
     return _safe_job(parsed)
 
 
-async def _semantic_match(cv: StructuredCV, job: StructuredJob) -> Dict:
+async def _semantic_match(cv: StructuredCV, job: StructuredJob, tier: str | None = None) -> Dict:
     payload = {
         "cv": cv.model_dump(),
         "job": job.model_dump(),
@@ -117,6 +117,7 @@ async def _semantic_match(cv: StructuredCV, job: StructuredJob) -> Dict:
     parsed = await call_json(
         SEMANTIC_MATCH_SYSTEM,
         f"DATOS:\n{json.dumps(payload, ensure_ascii=False)}",
+        tier=tier,
         fallback={
             "semantic_score": 0.0,
             "matching_skills": [],
@@ -142,6 +143,7 @@ async def _gap_analysis(
     job: StructuredJob,
     missing_skills: List[str],
     total_score: float,
+    tier: str | None = None,
 ) -> Dict:
     system = GAP_ANALYSIS_SYSTEM_TEMPLATE.format(mode=mode.value)
     payload = {
@@ -153,6 +155,7 @@ async def _gap_analysis(
     parsed = await call_json(
         system,
         f"DATOS:\n{json.dumps(payload, ensure_ascii=False)}",
+        tier=tier,
         fallback={"critical_gaps": [], "minor_gaps": [], "recommendations": []},
     )
     if not isinstance(parsed, dict):
@@ -168,17 +171,21 @@ async def _gap_analysis(
 async def analyze(payload: AnalyzeInput, user: User = Depends(get_current_user)):
     mode = payload.mode
 
+    # Daily quota enforcement (FREE tier capped, PRO unlimited).
+    user_doc = await enforce_daily_limit(user.user_id)
+    tier = (user_doc.get("tier") or "FREE").upper()
+
     # 1. Structured extraction (parallelisable, but keep simple/sequential).
     try:
-        cv = await _extract_cv(payload.cv_text)
-        job = await _extract_job(payload.job_text)
+        cv = await _extract_cv(payload.cv_text, tier=tier)
+        job = await _extract_job(payload.job_text, tier=tier)
     except Exception as e:
         logger.exception("Extraction failed")
         raise HTTPException(status_code=502, detail=f"Fallo al extraer estructura: {e}")
 
     # 2. Semantic match (LLM)
     try:
-        sem = await _semantic_match(cv, job)
+        sem = await _semantic_match(cv, job, tier=tier)
     except Exception:
         logger.exception("Semantic match failed")
         sem = {
@@ -236,7 +243,7 @@ async def analyze(payload: AnalyzeInput, user: User = Depends(get_current_user))
 
     # 4. Gap analysis (LLM)
     try:
-        gaps = await _gap_analysis(mode, cv, job, merged_missing, total_score)
+        gaps = await _gap_analysis(mode, cv, job, merged_missing, total_score, tier=tier)
     except Exception:
         logger.exception("Gap analysis failed")
         gaps = {"critical_gaps": [], "minor_gaps": [], "recommendations": []}

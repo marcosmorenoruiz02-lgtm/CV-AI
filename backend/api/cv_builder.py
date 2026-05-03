@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-from deps import User, db, get_current_user
+from deps import User, db, enforce_daily_limit, get_current_user, increment_analysis_count
 from schemas.cv import CVBuildInput
 from schemas.scoring import AnalyzeInput, AnalyzeOutput
 from schemas.user_mode import UserMode
@@ -46,6 +46,7 @@ async def questionnaire(
 
 @router.post("/build", response_model=CVBuildResponse)
 async def build(payload: CVBuildRequest, user: User = Depends(get_current_user)):
+    await enforce_daily_limit(user.user_id)
     cv = await build_cv(payload.data, payload.mode)
 
     cv_id: Optional[str] = None
@@ -78,6 +79,9 @@ async def build(payload: CVBuildRequest, user: User = Depends(get_current_user))
             )
         except Exception:
             logger.exception("Auto-scoring after CV build failed")
+
+    # Quota: count this build against the daily limit.
+    await increment_analysis_count(user.user_id)
 
     return CVBuildResponse(cv_id=cv_id, cv=cv, scoring=scoring_result)
 

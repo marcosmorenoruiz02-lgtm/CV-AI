@@ -25,7 +25,7 @@ from api.analysis import router as analysis_router
 from api.cv_builder import router as cv_builder_router
 from api.job_import import router as job_import_router
 from api.quick_analyze import router as quick_analyze_router
-from deps import User, WorkExperience, db, get_current_user
+from deps import User, WorkExperience, db, enforce_daily_limit, get_current_user, increment_analysis_count
 from services.llm.client import call_json, call_text
 
 # ------------------------- APP SETUP -------------------------
@@ -185,6 +185,21 @@ async def update_profile(payload: ProfileUpdate, user: User = Depends(get_curren
     return updated
 
 
+@api_router.post("/billing/upgrade")
+async def upgrade_to_pro(user: User = Depends(get_current_user)):
+    """Mock upgrade endpoint — pending real Stripe integration.
+
+    Currently flips the user's tier to PRO so the limit logic stops blocking.
+    Replace with a real checkout flow before going live.
+    """
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"tier": "PRO"}},
+    )
+    updated = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    return {"success": True, "user": updated}
+
+
 @api_router.post("/profile/upload-cv")
 async def upload_cv(file: UploadFile = File(...), user: User = Depends(get_current_user)):
     if not file.filename.lower().endswith(".pdf"):
@@ -301,6 +316,9 @@ async def create_analysis(payload: AnalysisCreate, user: User = Depends(get_curr
             detail="Completa tu perfil (o sube un CV) antes de generar una estrategia.",
         )
 
+    user_doc = await enforce_daily_limit(user.user_id)
+    tier = (user_doc.get("tier") or "FREE").upper()
+
     profile_block = _format_profile_for_prompt(user)
     chat_text = (
         f"{profile_block}\n\n"
@@ -313,6 +331,7 @@ async def create_analysis(payload: AnalysisCreate, user: User = Depends(get_curr
             HEADHUNTER_SYSTEM_PROMPT,
             chat_text,
             session_id=f"analysis-{user.user_id}",
+            tier=tier,
         )
     except Exception as e:
         logger.exception("LLM analysis failed")
@@ -332,6 +351,7 @@ async def create_analysis(payload: AnalysisCreate, user: User = Depends(get_curr
         "created_at": now.isoformat(),
     }
     await db.analyses.insert_one(doc.copy())
+    await increment_analysis_count(user.user_id)
     return Analysis(**{**doc, "created_at": now})
 
 

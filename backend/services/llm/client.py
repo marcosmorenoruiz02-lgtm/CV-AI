@@ -22,11 +22,29 @@ FALLBACK_MODEL = ("openai", "gpt-5.1")
 LLM_CALL_TIMEOUT_S = 45.0  # hard cap per model attempt
 
 
+# Per-tier configuration. The PRO tier uses the latest powerful model with more tokens.
+# The FREE tier uses a lighter / cheaper model with tighter budgets.
+TIER_MODELS = {
+    "FREE": ("openai", "gpt-5.1"),
+    "PRO": ("openai", "gpt-5.2"),
+}
+
+
 def _new_chat(system: str, session_id: str | None = None, model: tuple[str, str] | None = None) -> LlmChat:
     sid = session_id or f"llm-{uuid.uuid4().hex[:10]}"
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=sid, system_message=system)
     chat.with_model(*(model or DEFAULT_MODEL))
     return chat
+
+
+def _models_for_tier(tier: str | None) -> list[tuple[str, str]]:
+    """Return the ordered list of model attempts for a given tier."""
+    t = (tier or "FREE").upper()
+    if t == "PRO":
+        # Pro: best model first, fallback to lighter.
+        return [DEFAULT_MODEL, FALLBACK_MODEL]
+    # Free: lighter model first to save budget; fallback to the bigger one if lighter fails.
+    return [TIER_MODELS["FREE"], DEFAULT_MODEL]
 
 
 def _strip_fences(text: str) -> str:
@@ -57,9 +75,15 @@ def _extract_json_block(text: str) -> str:
     return text
 
 
-async def call_text(system: str, user_text: str, session_id: str | None = None) -> str:
-    """Plain text completion with hard timeout + fallback model."""
-    for model in (DEFAULT_MODEL, FALLBACK_MODEL):
+async def call_text(
+    system: str,
+    user_text: str,
+    session_id: str | None = None,
+    *,
+    tier: str | None = None,
+) -> str:
+    """Plain text completion with hard timeout + tier-aware model selection."""
+    for model in _models_for_tier(tier):
         try:
             chat = _new_chat(system, session_id, model=model)
             return await asyncio.wait_for(
@@ -79,10 +103,11 @@ async def call_json(
     *,
     session_id: str | None = None,
     fallback: Any | None = None,
+    tier: str | None = None,
 ) -> Any:
-    """Send a prompt that MUST return JSON. Parses robustly with fallback model."""
+    """Send a prompt that MUST return JSON. Tier-aware model selection."""
     raw = None
-    for model in (DEFAULT_MODEL, FALLBACK_MODEL):
+    for model in _models_for_tier(tier):
         try:
             chat = _new_chat(system, session_id, model=model)
             raw = await asyncio.wait_for(
