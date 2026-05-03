@@ -276,6 +276,9 @@ async def analyze(payload: AnalyzeInput, user: User = Depends(get_current_user))
             }
         )
 
+    # Count this successful call against the user's daily quota (FREE tier).
+    await increment_analysis_count(user.user_id)
+
     return AnalyzeOutput(
         total_score=total_score,
         breakdown=breakdown,

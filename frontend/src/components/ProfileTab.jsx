@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { FileUp, Loader2, Plus, Save, Trash2, UploadCloud, Check } from "lucide-react";
+import { FileUp, Loader2, Plus, Save, Trash2, UploadCloud, Check, Crown, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { Badge } from "./ui/badge";
+import { Progress } from "./ui/progress";
 
 const emptyExp = { role: "", company: "", period: "", description: "" };
+const FREE_DAILY_LIMIT = 3;
 
 export default function ProfileTab() {
-    const { user, setUser } = useAuth();
+    const { user, setUser, checkAuth } = useAuth();
     const [form, setForm] = useState({
         name: "",
         headline: "",
@@ -18,6 +21,7 @@ export default function ProfileTab() {
     const [skillInput, setSkillInput] = useState("");
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [upgrading, setUpgrading] = useState(false);
     const [dragOver, setDragOver] = useState(false);
     const fileRef = useRef(null);
 
@@ -97,6 +101,24 @@ export default function ProfileTab() {
         }
     };
 
+    const onUpgrade = async () => {
+        setUpgrading(true);
+        try {
+            await api.post("/billing/upgrade");
+            await checkAuth();
+            toast.success("¡Bienvenido a Pro! Análisis ilimitados activados.");
+        } catch (err) {
+            toast.error(err.response?.data?.detail || "No se pudo activar Pro");
+        } finally {
+            setUpgrading(false);
+        }
+    };
+
+    const tier = (user?.tier || "FREE").toUpperCase();
+    const used = Number(user?.daily_analyses_count || 0);
+    const pct = Math.min((used / FREE_DAILY_LIMIT) * 100, 100);
+    const isPro = tier === "PRO";
+
     return (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12" data-testid="profile-tab">
             {/* Upload CV */}
@@ -162,6 +184,91 @@ export default function ProfileTab() {
                             pulsas Guardar
                         </li>
                     </ul>
+                </div>
+
+                {/* Plan / Tier card */}
+                <div
+                    data-testid="plan-card"
+                    className={`mt-4 rounded-2xl border p-5 shadow-sm ${
+                        isPro
+                            ? "border-emerald-200 bg-gradient-to-br from-emerald-50 to-white dark:border-emerald-900/40 dark:from-emerald-950/30 dark:to-slate-900"
+                            : "border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-800/60"
+                    }`}
+                >
+                    <div className="mb-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div
+                                className={`flex h-8 w-8 items-center justify-center rounded-xl text-white shadow-sm ${
+                                    isPro
+                                        ? "bg-emerald-500 shadow-emerald-500/30"
+                                        : "bg-slate-400 shadow-slate-400/20"
+                                }`}
+                            >
+                                <Crown className="h-4 w-4" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    Tu plan
+                                </p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    {isPro ? "Análisis ilimitados" : "3 análisis por día"}
+                                </p>
+                            </div>
+                        </div>
+                        {isPro ? (
+                            <Badge
+                                data-testid="profile-tier-badge"
+                                className="bg-emerald-500 text-white hover:bg-emerald-600"
+                            >
+                                PRO
+                            </Badge>
+                        ) : (
+                            <Badge
+                                data-testid="profile-tier-badge"
+                                variant="secondary"
+                                className="bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                            >
+                                FREE
+                            </Badge>
+                        )}
+                    </div>
+
+                    {!isPro && (
+                        <>
+                            <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                                <span>Uso diario</span>
+                                <span
+                                    data-testid="profile-credits-count"
+                                    className="font-semibold tabular-nums text-slate-700 dark:text-slate-200"
+                                >
+                                    {used}/{FREE_DAILY_LIMIT}
+                                </span>
+                            </div>
+                            <Progress value={pct} className="h-1.5" />
+                            <button
+                                data-testid="upgrade-pro-btn"
+                                onClick={onUpgrade}
+                                disabled={upgrading}
+                                className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-500/20 transition-all hover:shadow-lg hover:shadow-blue-500/30 disabled:opacity-60"
+                            >
+                                {upgrading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Zap className="h-4 w-4" />
+                                )}
+                                {upgrading ? "Activando…" : "Subir a Pro"}
+                            </button>
+                            <p className="mt-2 text-center text-[11px] text-slate-400">
+                                Incluye GPT-5.2 + análisis ilimitados
+                            </p>
+                        </>
+                    )}
+
+                    {isPro && (
+                        <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                            Tienes análisis ilimitados con GPT-5.2. Gracias por apoyar CVBoost.
+                        </p>
+                    )}
                 </div>
             </div>
 

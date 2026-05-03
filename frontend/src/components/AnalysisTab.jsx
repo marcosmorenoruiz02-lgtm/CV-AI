@@ -2,25 +2,50 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Sparkles, Loader2, Briefcase, Copy, Check, AlertCircle } from "lucide-react";
+import { Sparkles, Loader2, Briefcase, Copy, Check, AlertCircle, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import TierUsageCard from "./TierUsageCard";
+
+const FREE_DAILY_LIMIT = 3;
 
 export default function AnalysisTab({ goToHistory }) {
-    const { user } = useAuth();
+    const { user, checkAuth } = useAuth();
     const [jobTitle, setJobTitle] = useState("");
     const [jobDescription, setJobDescription] = useState("");
     const [loading, setLoading] = useState(false);
+    const [upgrading, setUpgrading] = useState(false);
     const [report, setReport] = useState("");
     const [copied, setCopied] = useState(false);
 
     const profileComplete =
         !!user && (user.headline || (user.skills || []).length || (user.experience || []).length);
 
+    const tier = (user?.tier || "FREE").toUpperCase();
+    const used = Number(user?.daily_analyses_count || 0);
+    const limitReached = tier === "FREE" && used >= FREE_DAILY_LIMIT;
+
+    const onUpgrade = async () => {
+        setUpgrading(true);
+        try {
+            await api.post("/billing/upgrade");
+            await checkAuth();
+            toast.success("¡Bienvenido a Pro! Análisis ilimitados activados.");
+        } catch (err) {
+            toast.error(err.response?.data?.detail || "No se pudo activar Pro");
+        } finally {
+            setUpgrading(false);
+        }
+    };
+
     const onGenerate = async () => {
         if (!jobDescription.trim()) {
             toast.error("Pega una oferta para analizar");
+            return;
+        }
+        if (limitReached) {
+            toast.error("Has agotado tus 3 análisis diarios. Sube a Pro para continuar.");
             return;
         }
         setLoading(true);
@@ -32,7 +57,13 @@ export default function AnalysisTab({ goToHistory }) {
             });
             setReport(data.report_markdown);
             toast.success("Estrategia lista");
+            // Refresh user so the daily counter updates in the UI
+            checkAuth();
         } catch (err) {
+            if (err.response?.status === 403) {
+                // Daily limit hit server-side; refresh to reflect counter
+                checkAuth();
+            }
             toast.error(err.response?.data?.detail || "No se pudo generar la estrategia");
         } finally {
             setLoading(false);
@@ -53,6 +84,12 @@ export default function AnalysisTab({ goToHistory }) {
                     <p className="mb-5 text-sm text-slate-500">
                         Pega la oferta y deja que el headhunter trabaje por ti.
                     </p>
+
+                    <TierUsageCard
+                        user={user}
+                        onUpgrade={onUpgrade}
+                        upgrading={upgrading}
+                    />
 
                     {!profileComplete && (
                         <div className="mb-4 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
@@ -95,10 +132,10 @@ export default function AnalysisTab({ goToHistory }) {
                     <motion.button
                         data-testid="generate-strategy-btn"
                         onClick={onGenerate}
-                        disabled={loading}
-                        whileHover={{ scale: loading ? 1 : 1.01 }}
-                        whileTap={{ scale: loading ? 1 : 0.99 }}
-                        className="btn-primary w-full !py-3.5 text-base"
+                        disabled={loading || limitReached}
+                        whileHover={{ scale: loading || limitReached ? 1 : 1.01 }}
+                        whileTap={{ scale: loading || limitReached ? 1 : 0.99 }}
+                        className="btn-primary w-full !py-3.5 text-base disabled:cursor-not-allowed disabled:opacity-60"
                     >
                         {loading ? (
                             <>
@@ -109,6 +146,11 @@ export default function AnalysisTab({ goToHistory }) {
                                     <span className="dot-bouncing" />
                                     <span className="dot-bouncing" />
                                 </span>
+                            </>
+                        ) : limitReached ? (
+                            <>
+                                <Lock className="h-5 w-5" />
+                                Límite diario alcanzado
                             </>
                         ) : (
                             <>
