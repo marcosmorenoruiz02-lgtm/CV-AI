@@ -27,7 +27,9 @@ db = _client[DB_NAME]
 
 # --------- Tier limits ---------
 
-FREE_DAILY_LIMIT = 3
+# Free users get 4 analyses per calendar month (UTC). Pro users are unlimited
+# while their paid subscription is active (pro_expires_at in the future).
+FREE_MONTHLY_LIMIT = 4
 
 
 class WorkExperience(BaseModel):
@@ -46,59 +48,85 @@ class User(BaseModel):
     skills: List[str] = []
     experience: List[WorkExperience] = []
     cv_raw_text: str = ""
-    mode: str = "professional"             # "junior" | "professional"
-    tier: str = "FREE"                     # "FREE" | "PRO"
-    daily_analyses_count: int = 0
-    last_analysis_date: Optional[str] = None  # ISO date string (UTC)
+    mode: str = "professional"                 # "junior" | "professional"
+    tier: str = "FREE"                         # "FREE" | "PRO"
+    monthly_analyses_count: int = 0
+    last_analysis_month: Optional[str] = None  # "YYYY-MM" in UTC
+    pro_expires_at: Optional[datetime] = None  # When the Pro access lapses → back to FREE
+    stripe_customer_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-def _today_utc_iso() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+def _current_month_utc() -> str:
+    now = datetime.now(timezone.utc)
+    return f"{now.year:04d}-{now.month:02d}"
 
 
-async def enforce_daily_limit(user_id: str) -> dict:
-    """Reset count if a new UTC day, then enforce FREE-tier limit. Returns the live user doc.
+def _is_pro_active(user_doc: dict) -> bool:
+    if (user_doc.get("tier") or "FREE").upper() != "PRO":
+        return False
+    exp = user_doc.get("pro_expires_at")
+    if exp is None:
+        return False  # PRO flag without expiry → treat as expired
+    if isinstance(exp, str):
+        try:
+            exp = datetime.fromisoformat(exp)
+        except ValueError:
+            return False
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    return exp > datetime.now(timezone.utc)
 
-    Pure server-side time check (UTC) — los usuarios no pueden saltarse el límite cambiando
-    su reloj local porque toda la lógica usa la hora del servidor.
-    """
-    today = _today_utc_iso()
 
-    # 1) Reset if the stored date is not today (either older or null).
+async def enforce_monthly_limit(user_id: str) -> dict:
+    """Reset monthly counter if the month changed, downgrade expired PRO users,
+    then enforce FREE-tier limit. Server-side UTC check (user clocks can't bypass)."""
+    this_month = _current_month_utc()
+
+    # 1) Reset counter if a new UTC month started.
     await db.users.update_one(
-        {"user_id": user_id, "last_analysis_date": {"$ne": today}},
-        {"$set": {"daily_analyses_count": 0, "last_analysis_date": today}},
+        {"user_id": user_id, "last_analysis_month": {"$ne": this_month}},
+        {"$set": {"monthly_analyses_count": 0, "last_analysis_month": this_month}},
     )
 
-    # 2) Re-read fresh user state.
     user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     if not user_doc:
         raise HTTPException(status_code=401, detail="User not found")
 
-    tier = (user_doc.get("tier") or "FREE").upper()
-    count = int(user_doc.get("daily_analyses_count") or 0)
+    # 2) Downgrade expired PRO users back to FREE.
+    if (user_doc.get("tier") or "FREE").upper() == "PRO" and not _is_pro_active(user_doc):
+        await db.users.update_one(
+            {"user_id": user_id}, {"$set": {"tier": "FREE"}}
+        )
+        user_doc["tier"] = "FREE"
 
-    if tier == "FREE" and count >= FREE_DAILY_LIMIT:
+    tier = (user_doc.get("tier") or "FREE").upper()
+    count = int(user_doc.get("monthly_analyses_count") or 0)
+
+    if tier == "FREE" and count >= FREE_MONTHLY_LIMIT:
         raise HTTPException(
             status_code=403,
             detail=(
-                "Has llegado al límite diario gratuito "
-                f"({FREE_DAILY_LIMIT} análisis). Actualiza a Pro para análisis ilimitados."
+                f"Has agotado tus {FREE_MONTHLY_LIMIT} análisis gratuitos de este mes. "
+                "Suscríbete a Pro por 5€/mes para análisis ilimitados."
             ),
         )
     return user_doc
 
 
 async def increment_analysis_count(user_id: str) -> None:
-    """Atomically bump the user's daily counter (after a successful AI call)."""
+    """Atomically bump the user's monthly counter (after a successful AI call)."""
     await db.users.update_one(
         {"user_id": user_id},
         {
-            "$inc": {"daily_analyses_count": 1},
-            "$set": {"last_analysis_date": _today_utc_iso()},
+            "$inc": {"monthly_analyses_count": 1},
+            "$set": {"last_analysis_month": _current_month_utc()},
         },
     )
+
+
+# Backwards-compat aliases so older routers keep working without a big refactor.
+enforce_daily_limit = enforce_monthly_limit
 
 
 async def get_current_user(request: Request) -> User:
@@ -126,10 +154,25 @@ async def get_current_user(request: Request) -> User:
     user_doc = await db.users.find_one({"user_id": session_doc["user_id"]}, {"_id": 0})
     if not user_doc:
         raise HTTPException(status_code=401, detail="User not found")
+
+    # Downgrade expired PRO users lazily on every auth check.
+    if (user_doc.get("tier") or "FREE").upper() == "PRO" and not _is_pro_active(user_doc):
+        await db.users.update_one(
+            {"user_id": session_doc["user_id"]}, {"$set": {"tier": "FREE"}}
+        )
+        user_doc["tier"] = "FREE"
+
     if isinstance(user_doc.get("created_at"), str):
         user_doc["created_at"] = datetime.fromisoformat(user_doc["created_at"])
+    if isinstance(user_doc.get("pro_expires_at"), str):
+        try:
+            user_doc["pro_expires_at"] = datetime.fromisoformat(user_doc["pro_expires_at"])
+        except ValueError:
+            user_doc["pro_expires_at"] = None
     user_doc.setdefault("mode", "professional")
     user_doc.setdefault("tier", "FREE")
-    user_doc.setdefault("daily_analyses_count", 0)
-    user_doc.setdefault("last_analysis_date", None)
+    user_doc.setdefault("monthly_analyses_count", 0)
+    user_doc.setdefault("last_analysis_month", None)
+    user_doc.setdefault("pro_expires_at", None)
+    user_doc.setdefault("stripe_customer_id", None)
     return User(**user_doc)

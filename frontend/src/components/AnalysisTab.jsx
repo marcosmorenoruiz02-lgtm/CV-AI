@@ -8,7 +8,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import TierUsageCard from "./TierUsageCard";
 
-const FREE_DAILY_LIMIT = 3;
+const FREE_MONTHLY_LIMIT = 4;
 
 export default function AnalysisTab({ goToHistory }) {
     const { user, checkAuth } = useAuth();
@@ -23,18 +23,23 @@ export default function AnalysisTab({ goToHistory }) {
         !!user && (user.headline || (user.skills || []).length || (user.experience || []).length);
 
     const tier = (user?.tier || "FREE").toUpperCase();
-    const used = Number(user?.daily_analyses_count || 0);
-    const limitReached = tier === "FREE" && used >= FREE_DAILY_LIMIT;
+    const used = Number(user?.monthly_analyses_count || 0);
+    const limitReached = tier === "FREE" && used >= FREE_MONTHLY_LIMIT;
 
     const onUpgrade = async () => {
         setUpgrading(true);
         try {
-            await api.post("/billing/upgrade");
-            await checkAuth();
-            toast.success("¡Bienvenido a Pro! Análisis ilimitados activados.");
+            const { data } = await api.post("/payments/checkout/session", {
+                origin_url: window.location.origin,
+                package_id: "cvboost_pro_monthly",
+            });
+            if (data?.url) {
+                window.location.href = data.url;
+            } else {
+                throw new Error("No checkout URL returned");
+            }
         } catch (err) {
-            toast.error(err.response?.data?.detail || "No se pudo activar Pro");
-        } finally {
+            toast.error(err.response?.data?.detail || "No se pudo iniciar el pago");
             setUpgrading(false);
         }
     };
@@ -45,7 +50,9 @@ export default function AnalysisTab({ goToHistory }) {
             return;
         }
         if (limitReached) {
-            toast.error("Has agotado tus 3 análisis diarios. Sube a Pro para continuar.");
+            toast.error(
+                "Has agotado tus 4 análisis gratuitos de este mes. Suscríbete a Pro para continuar."
+            );
             return;
         }
         setLoading(true);
@@ -57,11 +64,9 @@ export default function AnalysisTab({ goToHistory }) {
             });
             setReport(data.report_markdown);
             toast.success("Estrategia lista");
-            // Refresh user so the daily counter updates in the UI
             checkAuth();
         } catch (err) {
             if (err.response?.status === 403) {
-                // Daily limit hit server-side; refresh to reflect counter
                 checkAuth();
             }
             toast.error(err.response?.data?.detail || "No se pudo generar la estrategia");
@@ -150,7 +155,7 @@ export default function AnalysisTab({ goToHistory }) {
                         ) : limitReached ? (
                             <>
                                 <Lock className="h-5 w-5" />
-                                Límite diario alcanzado
+                                Límite mensual alcanzado
                             </>
                         ) : (
                             <>

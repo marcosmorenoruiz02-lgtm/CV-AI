@@ -8,7 +8,7 @@ import { Badge } from "./ui/badge";
 import { Progress } from "./ui/progress";
 
 const emptyExp = { role: "", company: "", period: "", description: "" };
-const FREE_DAILY_LIMIT = 3;
+const FREE_MONTHLY_LIMIT = 4;
 
 export default function ProfileTab() {
     const { user, setUser, checkAuth } = useAuth();
@@ -104,20 +104,26 @@ export default function ProfileTab() {
     const onUpgrade = async () => {
         setUpgrading(true);
         try {
-            await api.post("/billing/upgrade");
-            await checkAuth();
-            toast.success("¡Bienvenido a Pro! Análisis ilimitados activados.");
+            const { data } = await api.post("/payments/checkout/session", {
+                origin_url: window.location.origin,
+                package_id: "cvboost_pro_monthly",
+            });
+            if (data?.url) {
+                window.location.href = data.url;
+            } else {
+                throw new Error("No checkout URL returned");
+            }
         } catch (err) {
-            toast.error(err.response?.data?.detail || "No se pudo activar Pro");
-        } finally {
+            toast.error(err.response?.data?.detail || "No se pudo iniciar el pago");
             setUpgrading(false);
         }
     };
 
     const tier = (user?.tier || "FREE").toUpperCase();
-    const used = Number(user?.daily_analyses_count || 0);
-    const pct = Math.min((used / FREE_DAILY_LIMIT) * 100, 100);
+    const used = Number(user?.monthly_analyses_count || 0);
+    const pct = Math.min((used / FREE_MONTHLY_LIMIT) * 100, 100);
     const isPro = tier === "PRO";
+    const proExpiresAt = user?.pro_expires_at;
 
     return (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12" data-testid="profile-tab">
@@ -191,8 +197,8 @@ export default function ProfileTab() {
                     data-testid="plan-card"
                     className={`mt-4 rounded-2xl border p-5 shadow-sm ${
                         isPro
-                            ? "border-emerald-200 bg-gradient-to-br from-emerald-50 to-white dark:border-emerald-900/40 dark:from-emerald-950/30 dark:to-slate-900"
-                            : "border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-800/60"
+                            ? "border-teal-200 bg-gradient-to-br from-teal-50 to-white dark:border-teal-900/40 dark:from-teal-950/30 dark:to-slate-900"
+                            : "border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-800/60"
                     }`}
                 >
                     <div className="mb-3 flex items-center justify-between">
@@ -200,7 +206,7 @@ export default function ProfileTab() {
                             <div
                                 className={`flex h-8 w-8 items-center justify-center rounded-xl text-white shadow-sm ${
                                     isPro
-                                        ? "bg-emerald-500 shadow-emerald-500/30"
+                                        ? "bg-teal-600 shadow-teal-600/30"
                                         : "bg-slate-400 shadow-slate-400/20"
                                 }`}
                             >
@@ -211,14 +217,14 @@ export default function ProfileTab() {
                                     Tu plan
                                 </p>
                                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    {isPro ? "Análisis ilimitados" : "3 análisis por día"}
+                                    {isPro ? "Análisis ilimitados" : "4 análisis gratis al mes"}
                                 </p>
                             </div>
                         </div>
                         {isPro ? (
                             <Badge
                                 data-testid="profile-tier-badge"
-                                className="bg-emerald-500 text-white hover:bg-emerald-600"
+                                className="bg-teal-600 text-white hover:bg-teal-700"
                             >
                                 PRO
                             </Badge>
@@ -236,12 +242,12 @@ export default function ProfileTab() {
                     {!isPro && (
                         <>
                             <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                                <span>Uso diario</span>
+                                <span>Uso este mes</span>
                                 <span
                                     data-testid="profile-credits-count"
                                     className="font-semibold tabular-nums text-slate-700 dark:text-slate-200"
                                 >
-                                    {used}/{FREE_DAILY_LIMIT}
+                                    {used}/{FREE_MONTHLY_LIMIT}
                                 </span>
                             </div>
                             <Progress value={pct} className="h-1.5" />
@@ -249,25 +255,40 @@ export default function ProfileTab() {
                                 data-testid="upgrade-pro-btn"
                                 onClick={onUpgrade}
                                 disabled={upgrading}
-                                className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-500/20 transition-all hover:shadow-lg hover:shadow-blue-500/30 disabled:opacity-60"
+                                className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/25 transition-all hover:shadow-lg hover:shadow-indigo-500/40 disabled:opacity-60"
                             >
                                 {upgrading ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
                                     <Zap className="h-4 w-4" />
                                 )}
-                                {upgrading ? "Activando…" : "Subir a Pro"}
+                                {upgrading ? "Abriendo pago…" : "Suscribirme por 5€/mes"}
                             </button>
                             <p className="mt-2 text-center text-[11px] text-slate-400">
-                                Incluye GPT-5.2 + análisis ilimitados
+                                GPT-5.2 + análisis ilimitados · Cancela cuando quieras
                             </p>
                         </>
                     )}
 
                     {isPro && (
-                        <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                            Tienes análisis ilimitados con GPT-5.2. Gracias por apoyar CVBoost.
-                        </p>
+                        <>
+                            <p className="text-xs text-teal-700 dark:text-teal-300">
+                                Análisis ilimitados con GPT-5.2. Gracias por apoyar CVBoost.
+                            </p>
+                            {proExpiresAt && (
+                                <p
+                                    data-testid="pro-expires-at"
+                                    className="mt-1 text-[11px] text-slate-500 dark:text-slate-400"
+                                >
+                                    Renovación manual el{" "}
+                                    {new Date(proExpiresAt).toLocaleDateString("es-ES", {
+                                        day: "2-digit",
+                                        month: "long",
+                                        year: "numeric",
+                                    })}
+                                </p>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

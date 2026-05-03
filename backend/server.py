@@ -24,6 +24,7 @@ from starlette.middleware.cors import CORSMiddleware
 from api.analysis import router as analysis_router
 from api.cv_builder import router as cv_builder_router
 from api.job_import import router as job_import_router
+from api.payments import router as payments_router
 from api.quick_analyze import router as quick_analyze_router
 from deps import User, WorkExperience, db, enforce_daily_limit, get_current_user, increment_analysis_count
 from services.llm.client import call_json, call_text
@@ -187,17 +188,18 @@ async def update_profile(payload: ProfileUpdate, user: User = Depends(get_curren
 
 @api_router.post("/billing/upgrade")
 async def upgrade_to_pro(user: User = Depends(get_current_user)):
-    """Mock upgrade endpoint — pending real Stripe integration.
+    """DEPRECATED mock endpoint kept for backward compatibility.
 
-    Currently flips the user's tier to PRO so the limit logic stops blocking.
-    Replace with a real checkout flow before going live.
+    Real upgrades now go through Stripe Checkout (see /api/payments/checkout/session).
+    This endpoint is now a no-op that instructs the client to use the new flow.
     """
-    await db.users.update_one(
-        {"user_id": user.user_id},
-        {"$set": {"tier": "PRO"}},
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "Este endpoint ha sido reemplazado. "
+            "Usa POST /api/payments/checkout/session para pagar con Stripe."
+        ),
     )
-    updated = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
-    return {"success": True, "user": updated}
 
 
 @api_router.post("/profile/upload-cv")
@@ -399,6 +401,7 @@ app.include_router(api_router)
 app.include_router(analysis_router)        # /api/analyze
 app.include_router(cv_builder_router)      # /api/cv/build, /api/cv/questionnaire, /api/cv/list
 app.include_router(job_import_router)      # /api/job/import
+app.include_router(payments_router)        # /api/payments/*, /api/webhook/stripe
 app.include_router(quick_analyze_router)   # /api/quick-analyze (anonymous)
 
 import os

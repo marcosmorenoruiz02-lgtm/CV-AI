@@ -7,6 +7,8 @@ import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import AuthCallback from "./pages/AuthCallback";
 import Bookmarklet from "./pages/Bookmarklet";
+import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentCancel from "./pages/PaymentCancel";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function AppRouter() {
@@ -18,6 +20,15 @@ function AppRouter() {
         <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/bookmarklet" element={<Bookmarklet />} />
+            <Route
+                path="/payment/success"
+                element={
+                    <ProtectedRoute>
+                        <PaymentSuccess />
+                    </ProtectedRoute>
+                }
+            />
+            <Route path="/payment/cancel" element={<PaymentCancel />} />
             <Route
                 path="/dashboard"
                 element={
